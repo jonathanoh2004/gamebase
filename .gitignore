@@ -1,0 +1,16 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+
+# Local env and tooling
+.env
+.env*.local
+.vercel/
+.DS_Store
+
+# Game source material (rulebooks, photos) is never committed; see docs/PORTING.md
+games/*/source/
