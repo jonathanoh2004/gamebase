@@ -23,7 +23,7 @@ What to send:
 - **How your table plays:** house rules, variants, and the player counts you care about.
 - **Optional:** the moment you love about the game, and anything the digital version should do better than the cardboard.
 
-If your Claude client won't attach a PDF, paste the rules as Markdown. Another option is to make the repo private and commit the files under `games/<slug>/source/`. That folder is gitignored by default because this repo is public; source files are inputs only and never deployed.
+Attach the files to your message, or commit them under `games/<slug>/source/`. That folder lives in the private repo, so any later session can re-read the originals, and the site never serves it. If your Claude client won't attach a PDF, commit it there or paste the rules as Markdown.
 
 ---
 
@@ -83,7 +83,7 @@ I map the rules onto the engine contract (DESIGN.md §5):
 
 - **Integration:** the manifest and registry entry, plus room options (variants, player counts).
 - **A Playwright test** that plays a full multiplayer game in several browsers, including a reload mid-game.
-- **You playtest on the preview URL,** in the sandbox and in a real room. Your feedback goes back into `rules.md` or the choreography.
+- **You playtest on the preview URL:** the sandbox, plus a real room across your own browser windows. Previews stay behind Vercel's login, so friends join once the game is live in production. Your feedback goes back into `rules.md` or the choreography.
 
 ### Definition of done
 
@@ -93,14 +93,15 @@ I map the rules onto the engine contract (DESIGN.md §5):
 - [ ] Every event has an animation and a reduced-motion variant
 - [ ] Works at 375 px wide and on desktop; keyboard playable; color-blind glyphs on colored pieces
 - [ ] Multiplayer end-to-end test passes, including reconnect
-- [ ] Original art only; source files not committed
+- [ ] Original art only; source files never served by the site
+- [ ] Security checks pass for the port's changes: authorization matrix, hostile-input tests, review
 - [ ] Listed in the library with an animated cover
 
 ---
 
 ## Worked example: Camel Up (preview)
 
-This preview is based on what I know of the 2nd edition. **Your rulebook replaces all of it in Phase 1.**
+This preview is based on what I know of the 2nd edition (2018), the one we're porting. **Your rulebook replaces all of it in Phase 1.**
 
 **Components → software**
 

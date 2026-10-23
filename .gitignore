@@ -12,5 +12,6 @@ test-results/
 .vercel/
 .DS_Store
 
-# Game source material (rulebooks, photos) is never committed; see docs/PORTING.md
+# Rulebooks and photos stay out of git until the repo is private; then this rule goes.
+# See docs/PORTING.md.
 games/*/source/
