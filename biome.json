@@ -1,0 +1,142 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!!**/.next",
+      "!!**/.data",
+      "!!**/node_modules",
+      "!!games/*/source",
+      "!!test-results",
+      "!!playwright-report",
+      "!next-env.d.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "parser": { "tailwindDirectives": true }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "security": {
+        "noDangerouslySetInnerHtml": "error",
+        "noSecrets": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
+      "nursery": {
+        "noJsRestrictedProperties": {
+          "level": "error",
+          "options": {
+            "entries": [
+              {
+                "object": "sql",
+                "property": "raw",
+                "message": "Raw SQL is banned: pass values as bound parameters (docs/DESIGN.md §8.3)."
+              },
+              {
+                "property": "unsafe",
+                "message": "postgres.js unsafe() builds SQL from strings and is banned (docs/DESIGN.md §8.3)."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["lib/engine/**", "games/*/engine/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "Engines are pure TypeScript; UI code lives in ui/.",
+                  "react-dom": "Engines are pure TypeScript; UI code lives in ui/.",
+                  "next": "Engines must not depend on Next.js.",
+                  "postgres": "Engines never touch the database.",
+                  "drizzle-orm": "Engines never touch the database.",
+                  "@supabase/supabase-js": "Engines never touch the network."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "next/*",
+                      "animejs",
+                      "animejs/*",
+                      "@/lib/db/**",
+                      "@/lib/auth/**",
+                      "@/lib/runtime/**",
+                      "@/lib/client/**",
+                      "@/lib/motion/**",
+                      "@/lib/supabase/**",
+                      "@/components/**",
+                      "**/ui/**"
+                    ],
+                    "message": "Engines may only import other engine code and zod."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Date": "Engines are deterministic: take time from events, not the clock.",
+                  "window": "Engines run on the server too.",
+                  "document": "Engines run on the server too.",
+                  "localStorage": "Engines are pure."
+                }
+              }
+            }
+          },
+          "nursery": {
+            "noJsRestrictedProperties": {
+              "level": "error",
+              "options": {
+                "entries": [
+                  {
+                    "object": "Math",
+                    "property": "random",
+                    "message": "Engines draw randomness only from the seeded rng."
+                  },
+                  {
+                    "object": "sql",
+                    "property": "raw",
+                    "message": "Raw SQL is banned."
+                  },
+                  {
+                    "property": "unsafe",
+                    "message": "postgres.js unsafe() is banned."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

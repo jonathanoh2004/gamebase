@@ -15,3 +15,7 @@ test-results/
 # Rulebooks and photos stay out of git until the repo is private; then this rule goes.
 # See docs/PORTING.md.
 games/*/source/
+
+# Next.js and TypeScript
+next-env.d.ts
+*.tsbuildinfo

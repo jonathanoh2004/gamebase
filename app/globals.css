@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens (docs/DESIGN.md §2.3). The default Tailwind palette is
+ * removed on purpose: every color on screen comes from this list.
+ */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Neutrals */
+  --color-ink-0: #0e0e10;
+  --color-ink-1: #16161a;
+  --color-ink-2: #1e1e23;
+  --color-ink-3: #27272d;
+  --color-rule: #2c2c33;
+  --color-rule-strong: #3d3d45;
+  --color-paper: #f2efe8;
+  --color-dim: #bdb8ae;
+  --color-mute: #8e8b85;
+
+  /* Piece palette: saturated hues, each paired with a glyph in lib/palette.ts */
+  --color-red: #ff5449;
+  --color-orange: #ff9636;
+  --color-yellow: #f7d038;
+  --color-green: #34c77b;
+  --color-teal: #2cc4c4;
+  --color-blue: #4c8dff;
+  --color-violet: #9d6bff;
+  --color-pink: #ff6fb5;
+
+  /* Camel Up's crazy camels */
+  --color-bone: #ece7dc;
+  --color-coal: #1b1b1f;
+
+  /* Board materials (Camel Up desert) */
+  --color-sand-0: #2a2117;
+  --color-sand-1: #3a2e20;
+  --color-sand-2: #c9a467;
+
+  --font-*: initial;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-martian), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-full: 9999px;
+
+  --ease-out-3: cubic-bezier(0.22, 0.9, 0.3, 1);
+  --ease-in-out-2: cubic-bezier(0.6, 0, 0.4, 1);
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --grid: 8px;
+    --dur-snap: 140ms;
+    --dur-ui: 340ms;
+  }
+
+  html,
+  body {
+    background: var(--color-ink-0);
+    color: var(--color-paper);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "tnum";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background: var(--color-yellow);
+    color: var(--color-ink-0);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-yellow);
+    outline-offset: 2px;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  /* Mono label: ROOM K7QX · 4/6 SEATED */
+  .label {
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    line-height: var(--text-micro--line-height);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+
+  /* The visible 8px grid, used sparingly on large surfaces */
+  .grid-paper {
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--color-rule) 55%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--color-rule) 55%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: calc(var(--grid) * 8) calc(var(--grid) * 8);
+    background-position: -1px -1px;
+  }
+}

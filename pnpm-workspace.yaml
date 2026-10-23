@@ -1,0 +1,15 @@
+# Single-package repo; this file only carries pnpm settings.
+
+# Supply-chain guard: never install a release younger than three days.
+minimumReleaseAge: 4320
+
+# Dependency install scripts are blocked unless listed here. Each entry was
+# reviewed: esbuild verifies its binary; embedded-postgres only restores the
+# symlinks inside its bundled Postgres build (local dev and tests only).
+onlyBuiltDependencies:
+  - esbuild
+  - "@embedded-postgres/darwin-arm64"
+  - "@embedded-postgres/darwin-x64"
+  - "@embedded-postgres/linux-arm64"
+  - "@embedded-postgres/linux-x64"
+  - "@embedded-postgres/windows-x64"
