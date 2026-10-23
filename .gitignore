@@ -10,6 +10,7 @@ test-results/
 .env
 .env*.local
 .vercel/
+.data/
 .DS_Store
 
 # Rulebooks and photos stay out of git until the repo is private; then this rule goes.
