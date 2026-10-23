@@ -25,12 +25,12 @@ describe('guess-roll (runtime test game)', () => {
     expect(guessRoll.viewFor(s, 0).myPick).toBeNull();
     expect(guessRoll.viewFor(s, 0).called).toEqual([false, true, false]);
     expect(guessRoll.viewFor(s, 1).myPick).toBe('low');
-    expect(guessRoll.redactEvent(events[0] as never, 0)).toEqual({
+    expect(guessRoll.redactEvent(events[0] as never, 0, s)).toEqual({
       type: 'picked',
       seat: 1,
       guess: null,
     });
-    expect(guessRoll.redactEvent(events[0] as never, 1)).toEqual(events[0]);
+    expect(guessRoll.redactEvent(events[0] as never, 1, s)).toEqual(events[0]);
     expect(JSON.stringify(guessRoll.viewFor(s, 'spectator'))).not.toContain('low');
   });
 

@@ -54,7 +54,8 @@ describe('invites', () => {
     });
 
     const revoked = await createInvite(ada, null);
-    const [row] = await owner()`select id from app.invites where token_hash = ${hashToken(revoked.token)}`;
+    const [row] =
+      await owner()`select id from app.invites where token_hash = ${hashToken(revoked.token)}`;
     await revokeInvite(row?.id as string);
     await expect(redeemInvite(await makeUser('', 'pending'), revoked.token)).rejects.toMatchObject({
       status: 404,
@@ -72,7 +73,7 @@ describe('invites', () => {
   it('ignores malformed tokens without touching the database', async () => {
     const someone = await makeUser('', 'pending');
     await expect(redeemInvite(someone, "' or 1=1 --")).rejects.toMatchObject({ status: 404 });
-    expect(await peekInvite('x'.repeat(43) + "'")).toBeNull();
+    expect(await peekInvite(`${'x'.repeat(43)}'`)).toBeNull();
   });
 
   it('only lets seated players invite into a room', async () => {

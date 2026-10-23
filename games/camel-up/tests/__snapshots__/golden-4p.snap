@@ -1,0 +1,14 @@
+{
+  "coins": [
+    6,
+    30,
+    30,
+    19,
+  ],
+  "final": {
+    "loser": "green",
+    "winner": "red",
+  },
+  "legs": 7,
+  "moves": 424,
+}

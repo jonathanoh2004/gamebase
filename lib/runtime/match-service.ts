@@ -52,13 +52,6 @@ export async function startMatch(
   return match.id;
 }
 
-interface Access {
-  roomId: string;
-  matchId: string;
-  engine: AnyEngine;
-  seat: number | null;
-}
-
 /** Who is asking, and may they see this match? Seated players, or members when spectators are allowed. */
 async function access(
   tx: Tx | ReturnType<typeof db>,

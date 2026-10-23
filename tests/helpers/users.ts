@@ -28,7 +28,7 @@ export async function makeUser(
   await owner()`insert into auth.users (id, email) values (${id}, ${`${id}@test.local`})`;
   await owner()`
     insert into app.profiles (id, display_name, avatar_seed, color, role)
-    values (${id}, ${name}, ${'seed' + id.slice(0, 8)}, ${color}, ${role})
+    values (${id}, ${name}, ${`seed${id.slice(0, 8)}`}, ${color}, ${role})
   `;
   return refresh({ id } as Viewer);
 }

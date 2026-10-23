@@ -1,9 +1,14 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { syncMatch, applyAction } from '@/lib/runtime/match-service';
+import { applyAction, syncMatch } from '@/lib/runtime/match-service';
 import { closeOwner, makeUser, owner } from '@/tests/helpers/users';
 import { createRoom, getRoomView, runLobbyCommand } from './rooms';
 
 afterAll(closeOwner);
+
+function only<T>(x: T | undefined): T {
+  if (x === undefined) throw new Error('missing test fixture');
+  return x;
+}
 
 async function lobbyWith(n: number) {
   const host = await makeUser('Host', 'member', 'red');
@@ -56,7 +61,7 @@ describe('rooms and lobby', () => {
     await expect(runLobbyCommand(host, roomId, { type: 'start' })).rejects.toMatchObject({
       status: 409,
     });
-    await runLobbyCommand(others[0]!, roomId, { type: 'ready', ready: true });
+    await runLobbyCommand(only(others[0]), roomId, { type: 'ready', ready: true });
     await runLobbyCommand(host, roomId, { type: 'start' });
     expect((await getRoomView(host, roomId)).status).toBe('playing');
   });
@@ -72,7 +77,7 @@ describe('rooms and lobby', () => {
 describe('match runtime', () => {
   async function started() {
     const { host, roomId, others } = await lobbyWith(2);
-    const guest = others[0]!;
+    const guest = only(others[0]);
     await runLobbyCommand(guest, roomId, { type: 'ready', ready: true });
     await runLobbyCommand(host, roomId, { type: 'start' });
     return { host, guest, roomId };
@@ -103,10 +108,16 @@ describe('match runtime', () => {
       applyAction(host, roomId, { expectedVersion: 1, action: { type: 'pick', guess: 'low' } }),
     ).rejects.toMatchObject({ status: 409, code: 'not_your_turn' });
     await expect(
-      applyAction(guest, roomId, { expectedVersion: 1, action: { type: 'pick', guess: 'sideways' } }),
+      applyAction(guest, roomId, {
+        expectedVersion: 1,
+        action: { type: 'pick', guess: 'sideways' },
+      }),
     ).rejects.toThrow();
     await expect(
-      applyAction(guest, roomId, { expectedVersion: 1, action: { type: 'pick', guess: 'low', x: 1 } }),
+      applyAction(guest, roomId, {
+        expectedVersion: 1,
+        action: { type: 'pick', guess: 'low', x: 1 },
+      }),
     ).rejects.toThrow();
   });
 

@@ -64,8 +64,11 @@ export interface GameEngine<
   /** Applies one event. Pure; randomness is already baked into the event. */
   evolve(state: State, event: Event): State;
   viewFor(state: State, viewer: Viewer): View;
-  /** Hides secret details of an event, or drops it entirely, for this viewer. */
-  redactEvent(event: Event, viewer: Viewer): Event | null;
+  /**
+   * Hides secret details of an event, or drops it entirely, for this viewer.
+   * `after` is the full state right after the event (never sent anywhere).
+   */
+  redactEvent(event: Event, viewer: Viewer, after: State): Event | null;
   outcome(state: State): Outcome | null;
 }
 

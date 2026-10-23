@@ -23,7 +23,7 @@ export function buildFrames(
       frames.push({
         version,
         index,
-        event: engine.redactEvent(event, viewer),
+        event: engine.redactEvent(event, viewer, state),
         view: engine.viewFor(state, viewer),
       });
     });
