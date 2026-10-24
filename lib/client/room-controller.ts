@@ -9,6 +9,7 @@ import type { ActionResult, SyncResult } from '@/lib/runtime/match-service';
 import type { LobbyCommand, RoomView } from '@/lib/server/rooms';
 import { ApiError, api } from './api';
 import type { FrameListener, GameSession } from './session';
+import { throttled } from './throttle';
 
 export interface RoomState {
   room: RoomView;
@@ -22,6 +23,12 @@ export interface RoomState {
 
 const SAFETY_POLL_MS = 30_000;
 const DOWN_POLL_MS = 8_000;
+/**
+ * Any member in the channel can broadcast, so a doorbell is only a hint.
+ * Doorbell-driven fetches run at most this often: real moves still arrive at
+ * once, and a flood of fake doorbells can't burn through the rate limits.
+ */
+const DOORBELL_GAP_MS = 500;
 
 /**
  * Keeps one room in sync (docs/DESIGN.md §4.2): realtime doorbells trigger
@@ -37,6 +44,12 @@ export class RoomController implements GameSession {
   private resyncQueued = false;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  private lobbyBell = throttled(() => {
+    if (!this.stopped) void this.refreshRoom();
+  }, DOORBELL_GAP_MS);
+  private matchBell = throttled(() => {
+    if (!this.stopped) void this.sync();
+  }, DOORBELL_GAP_MS);
 
   constructor(
     private readonly config: ClientConfig,
@@ -67,10 +80,10 @@ export class RoomController implements GameSession {
       room.id,
       { seat: room.you.matchSeat ?? room.you.seat, name: this.me.name },
       {
-        onLobby: () => void this.refreshRoom(),
+        onLobby: () => this.lobbyBell.call(),
         onMatch: (v) => {
           const known = this.store.getState().version;
-          if (known === null || v > known) void this.sync();
+          if (known === null || v > known) this.matchBell.call();
         },
         onPresence: (presence) => this.store.setState({ presence }),
         onFx: (msg) => {
@@ -92,6 +105,8 @@ export class RoomController implements GameSession {
     this.channel = null;
     document.removeEventListener('visibilitychange', this.onVisible);
     if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.lobbyBell.cancel();
+    this.matchBell.cancel();
   }
 
   private onVisible = () => {
