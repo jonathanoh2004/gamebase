@@ -171,7 +171,16 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   };
 
   return (
-    <div ref={rootRef} className="grid gap-4 xl:grid-cols-[1fr_320px]" data-testid="camel-up">
+    <div
+      ref={rootRef}
+      className="grid gap-4 xl:grid-cols-[1fr_320px]"
+      data-testid="camel-up"
+      // Public state only, for tests and tooling.
+      data-leg={view.leg}
+      data-turn={view.turn}
+      data-rolled={view.rolled.length}
+      data-over={raceOver || undefined}
+    >
       <div className="mx-auto w-full min-w-0 space-y-3" style={{ maxWidth: BOARD_MAX_W }}>
         <div className="relative">
           <Stage

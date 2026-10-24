@@ -22,7 +22,7 @@ export const MANIFESTS: GameManifest[] = [
     tagline: 'Bet on a stampede.',
     blurb:
       'Five camels race around a pyramid, carrying each other on their backs while two crazy ones run the wrong way. Back the leader each leg, place your spectator tile, and call the overall winner and loser before anyone else does.',
-    players: { min: 2, max: 8, label: '3–8 players' },
+    players: { min: 2, max: 8, label: '2–8 players' },
     minutes: 30,
     tags: ['dice', 'betting', 'racing'],
     accent: 'yellow',
