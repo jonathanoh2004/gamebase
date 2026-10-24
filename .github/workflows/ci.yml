@@ -34,7 +34,7 @@ jobs:
       # Starts the local backend (fresh Postgres + `next start`) on :3100.
       - run: pnpm test:e2e
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright
           path: |
