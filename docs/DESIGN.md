@@ -396,7 +396,7 @@ Friends-only doesn't lower the bar. The site is on the public internet, so it's 
 - Laid out for laptops first. The board takes center stage, with player panels along the edge showing score, holdings and whose turn it is.
 - The current player gets an action bar with legal options highlighted.
 - The board is sized so that it and the action bar always fit the window.
-- A compact event log is always visible. The rules overview lives on the game page.
+- A compact event log is always visible, and a quick rules reference opens from the action bar.
 - When the tab is in the background, its title flags that it's your turn.
 - On phones, the board sits on top. The action bar under it offers every action as a full-size button, and the player panels form a compact grid below.
 

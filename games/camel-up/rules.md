@@ -128,3 +128,5 @@ Where the rulebook leaves room, this is how the port plays. Each one is easy to 
 - The pyramid "shake" is a real random draw among the dice still inside.
 - Overall bets are revealed card by card with their payouts, in placement order.
 - Optional room setting: hide money (H3).
+- A rules reference is one tap away in the action bar, and the starting player is marked on their panel.
+- With 6+ players, partnering is its own action in the action bar, and every panel shows whether its partnership card is available or who its partner is. The leg payout labels the ticket copied from a partner.

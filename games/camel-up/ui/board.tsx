@@ -69,11 +69,13 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   const [selected, setSelected] = useState<CamelUpAction | null>(null);
   const [betPile, setBetPile] = useState<Pile | null>(null);
   const [tileMode, setTileMode] = useState(false);
+  const [partnerMode, setPartnerMode] = useState(false);
   const [pending, setPending] = useState(false);
   const clear = useCallback(() => {
     setSelected(null);
     setBetPile(null);
     setTileMode(false);
+    setPartnerMode(false);
   }, []);
 
   const plan = useMemo(
@@ -173,11 +175,17 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   const showSpaces = canAct && (selected?.type === 'placeSpectator' || selected === null);
   const strongSpaces = canAct && tileMode;
   const partnersAllowed = view.players.length >= PARTNERSHIP_MIN_PLAYERS;
+  // R14: both partnership cards must still be on their "available" side.
+  const partnerChoices =
+    partnersAllowed && seat !== null && me?.partner === null
+      ? view.players.flatMap((p, s) => (s !== seat && p.partner === null ? [s] : []))
+      : [];
 
   const pick = (a: CamelUpAction) => {
     if (!canAct) return;
     setBetPile(null);
     if (a.type !== 'placeSpectator') setTileMode(false);
+    if (a.type !== 'partner') setPartnerMode(false);
     setSelected(a);
   };
 
@@ -310,6 +318,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
                     onClick={() => {
                       setSelected(null);
                       setTileMode(false);
+                      setPartnerMode(false);
                       setBetPile((p) => (p === pile ? null : pile));
                     }}
                     aria-label={`Bet on the overall ${pile}`}
@@ -476,16 +485,26 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
           betPile={betPile}
           tileMode={tileMode}
           canPlaceTile={legalSpaces.size > 0}
+          partnerChoices={partnerChoices}
+          partnerMode={partnerMode}
           hand={me?.hand ?? []}
           onPick={pick}
           onBetPile={(p) => {
             setSelected(null);
             setTileMode(false);
+            setPartnerMode(false);
             setBetPile(p);
           }}
           onTileMode={() => {
             setSelected(null);
+            setPartnerMode(false);
             setTileMode(true);
+          }}
+          onPartnerMode={() => {
+            setSelected(null);
+            setBetPile(null);
+            setTileMode(false);
+            setPartnerMode(true);
           }}
           onSide={(side) =>
             selected?.type === 'placeSpectator' && setSelected({ ...selected, side })
@@ -504,13 +523,10 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
             view={view}
             seat={s}
             player={players[s]}
-            canPartner={
-              canAct &&
-              partnersAllowed &&
-              s !== seat &&
-              me?.partner === null &&
-              view.players[s]?.partner === null
-            }
+            partnersInPlay={partnersAllowed}
+            canPartner={canAct && partnerChoices.includes(s)}
+            highlightPartner={partnerMode}
+            startsLeg={view.startingSeat === s}
             onPartner={() => pick({ type: 'partner', with: s })}
             onPickBet={
               s === seat && canAct

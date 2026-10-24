@@ -48,14 +48,23 @@ export function PlayerPanel({
   view,
   seat,
   player,
+  partnersInPlay,
   canPartner,
+  highlightPartner,
+  startsLeg,
   onPartner,
   onPickBet,
 }: {
   view: CamelUpView;
   seat: number;
   player: MatchPlayer | undefined;
+  /** 6+ players: everyone has a partnership card. */
+  partnersInPlay: boolean;
   canPartner: boolean;
+  /** You're choosing a partner: make the buttons stand out. */
+  highlightPartner: boolean;
+  /** Holds the starting player marker this leg. */
+  startsLeg: boolean;
   onPartner: () => void;
   onPickBet?: (color: RacingColor) => void;
 }) {
@@ -83,6 +92,18 @@ export function PlayerPanel({
           {p.name}
           {isYou && <span className="label ml-1.5">you</span>}
         </span>
+        {startsLeg && (
+          <span
+            className="label shrink-0 border border-sand-2/50 px-1 text-sand-2"
+            title="Starting player this leg"
+          >
+            <span className="max-sm:hidden">start</span>
+            <span className="sm:hidden" aria-hidden="true">
+              ▸
+            </span>
+            <span className="sr-only sm:hidden">starts this leg</span>
+          </span>
+        )}
         <span className="relative flex items-center gap-1 font-mono font-semibold" data-coins>
           <Coin size={16} />
           <Coins value={p.coins} />
@@ -131,14 +152,20 @@ export function PlayerPanel({
         )}
       </div>
 
-      {(partner || canPartner) && (
-        <div className="mt-2 flex items-center justify-between">
-          {partner ? <span className="label text-teal">partner · {partner.name}</span> : <span />}
+      {partnersInPlay && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2" data-partner>
+          <span className={cn('label flex items-center gap-1.5', partner && 'text-teal')}>
+            <Handshake />
+            {partner ? `partner · ${partner.name}` : 'partner card available'}
+          </span>
           {canPartner && (
             <button
               type="button"
               onClick={onPartner}
-              className="label border border-teal/60 px-2 py-0.5 text-teal hover:bg-teal hover:text-ink-0"
+              className={cn(
+                'label border border-teal/60 px-2 py-0.5 text-teal hover:bg-teal hover:text-ink-0',
+                highlightPartner && 'animate-pulse bg-teal/15',
+              )}
             >
               Partner up
             </button>
@@ -146,5 +173,19 @@ export function PlayerPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function Handshake() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2 12l4-4 4 2 3-2 3 1 6 3M2 12l5 5 2-1 2 2 2-1 2 1 5-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

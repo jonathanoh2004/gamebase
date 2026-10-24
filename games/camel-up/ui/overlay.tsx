@@ -108,7 +108,12 @@ export function BoardOverlay({
                     <span className="text-mute text-xs">
                       {s.lines.length === 0
                         ? 'no bets'
-                        : s.lines.map((l) => (l.reward > 0 ? `+${l.reward}` : l.reward)).join(' ')}
+                        : s.lines
+                            .map((l) => {
+                              const r = l.reward > 0 ? `+${l.reward}` : String(l.reward);
+                              return l.kind === 'partner' ? `partner ${r}` : r;
+                            })
+                            .join(' ')}
                     </span>
                     <Delta value={s.total} />
                   </span>
