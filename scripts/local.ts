@@ -58,10 +58,18 @@ async function main() {
     NEXT_TELEMETRY_DISABLED: '1',
   };
   const args = serve ? ['start', '-p', appPort] : ['dev', '-p', appPort];
-  const child = spawn(path.join(root, 'node_modules/.bin/next'), args, {
+  // Run Next's CLI with this same Node, not through node_modules/.bin: on
+  // Windows that entry is a .cmd shim, which spawn() can't start without a shell.
+  const nextCli = path.join(root, 'node_modules/next/dist/bin/next');
+  const child = spawn(process.execPath, [nextCli, ...args], {
     cwd: root,
     env: childEnv,
     stdio: 'inherit',
+  });
+  child.on('error', async (error) => {
+    console.error(`[app] could not start Next.js: ${error.message}`);
+    await db.stop().catch(() => {});
+    process.exit(1);
   });
   child.on('exit', async (code) => {
     await db.stop().catch(() => {});
