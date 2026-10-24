@@ -65,6 +65,9 @@ export function env(): Env {
 
 export const isLocalBackend = () => env().GAMEBASE_BACKEND === 'local';
 
+/** Dev sandbox and test games: local backend and Vercel previews, never production. */
+export const showDevTools = () => isLocalBackend() || env().VERCEL_ENV === 'preview';
+
 /** Settings the browser needs. Everything here is public by design. */
 export interface ClientConfig {
   backend: 'supabase' | 'local';

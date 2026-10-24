@@ -9,11 +9,19 @@ export interface CspInput {
   supabaseUrl?: string | null;
   /** Cloudflare Turnstile on the sign-in page. */
   turnstile?: boolean;
+  /** Force https for subresources (off for plain-http localhost). */
+  upgradeInsecure?: boolean;
 }
 
 const TURNSTILE = 'https://challenges.cloudflare.com';
 
-export function buildCsp({ nonce, dev, supabaseUrl, turnstile }: CspInput): string {
+export function buildCsp({
+  nonce,
+  dev,
+  supabaseUrl,
+  turnstile,
+  upgradeInsecure = !dev,
+}: CspInput): string {
   const connect = ["'self'"];
   if (supabaseUrl) {
     const url = new URL(supabaseUrl);
@@ -43,7 +51,7 @@ export function buildCsp({ nonce, dev, supabaseUrl, turnstile }: CspInput): stri
     'frame-ancestors': ["'none'"],
   };
   const parts = Object.entries(directives).map(([k, v]) => `${k} ${v.join(' ')}`);
-  if (!dev) parts.push('upgrade-insecure-requests');
+  if (upgradeInsecure) parts.push('upgrade-insecure-requests');
   return parts.join('; ');
 }
 

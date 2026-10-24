@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
+import { headers } from 'next/headers';
+import { Providers } from '@/components/providers';
+import { clientConfig } from '@/lib/env';
 import './globals.css';
 
 const grotesk = localFont({
@@ -27,10 +30,17 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Reading request headers makes every page dynamic, which the per-request
+  // CSP nonce requires (proxy.ts).
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="en" className={`${grotesk.variable} ${martian.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Providers config={clientConfig()} nonce={nonce}>
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

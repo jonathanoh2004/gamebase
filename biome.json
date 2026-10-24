@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
@@ -29,13 +33,21 @@
     }
   },
   "css": {
-    "parser": { "tailwindDirectives": true }
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "security": {
         "noDangerouslySetInnerHtml": "error",
         "noSecrets": "error"
@@ -51,11 +63,11 @@
               {
                 "object": "sql",
                 "property": "raw",
-                "message": "Raw SQL is banned: pass values as bound parameters (docs/DESIGN.md §8.3)."
+                "message": "Raw SQL is banned: pass values as bound parameters (docs/DESIGN.md \u00a78.3)."
               },
               {
                 "property": "unsafe",
-                "message": "postgres.js unsafe() builds SQL from strings and is banned (docs/DESIGN.md §8.3)."
+                "message": "postgres.js unsafe() builds SQL from strings and is banned (docs/DESIGN.md \u00a78.3)."
               }
             ]
           }
@@ -134,6 +146,16 @@
                 ]
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["lib/motion/use-scope.ts"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off"
           }
         }
       }

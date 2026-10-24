@@ -73,7 +73,6 @@
 
   body {
     font-family: var(--font-sans);
-    font-feature-settings: "ss01", "tnum";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     min-height: 100dvh;
@@ -125,5 +124,34 @@
       );
     background-size: calc(var(--grid) * 8) calc(var(--grid) * 8);
     background-position: -1px -1px;
+  }
+
+  /* "+5" / "−1" tags that lib/motion/kit.ts floatText spawns over an anchor */
+  .float-tag {
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    translate: -50% 0;
+    z-index: 5;
+    padding: 3px 6px;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-xs);
+    background: var(--color-ink-0);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .float-tag-good {
+    color: var(--color-green);
+  }
+  .float-tag-bad {
+    color: var(--color-red);
+  }
+  .float-tag-neutral {
+    color: var(--color-paper);
   }
 }

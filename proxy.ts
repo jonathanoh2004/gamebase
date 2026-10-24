@@ -46,6 +46,8 @@ export async function proxy(request: NextRequest) {
     dev: process.env.NODE_ENV === 'development',
     supabaseUrl: backend === 'supabase' ? supabaseUrl : null,
     turnstile: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
+    // The local backend serves plain http on localhost.
+    upgradeInsecure: backend === 'supabase' && process.env.NODE_ENV !== 'development',
   });
 
   const headers = new Headers(request.headers);

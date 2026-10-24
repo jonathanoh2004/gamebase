@@ -40,12 +40,18 @@ export function spectatorAt(
   return null;
 }
 
+/** The slice of state (or of a player's view) the tile rule needs. */
+export interface TileBoard {
+  track: CamelId[][];
+  players: { spectator: { space: number } | null }[];
+}
+
 /**
  * R10: an empty space (no camels, no tile), not space 1, not next to another
  * player's tile, and not where your own tile already is. Your own tile doesn't
  * block its neighbors while you move it (ruling 1).
  */
-export function canPlaceSpectator(state: CamelUpState, seat: Seat, space: number): boolean {
+export function canPlaceSpectator(state: TileBoard, seat: Seat, space: number): boolean {
   if (!Number.isInteger(space) || space < 2 || space > TRACK_LENGTH) return false;
   if ((state.track[space - 1]?.length ?? 0) > 0) return false;
   for (let owner = 0; owner < state.players.length; owner++) {
