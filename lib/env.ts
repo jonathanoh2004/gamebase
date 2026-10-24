@@ -20,6 +20,11 @@ const schema = z
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(20).optional(),
     SUPABASE_SECRET_KEY: z.string().min(20).optional(),
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+    /** Which sign-in buttons to show, e.g. "discord,email". */
+    SIGNIN_METHODS: z
+      .string()
+      .regex(/^(discord|google|email)(,(discord|google|email))*$/, 'e.g. discord,google,email')
+      .default('discord,google,email'),
     CRON_SECRET: z.string().min(32).optional(),
     DEV_AUTH_SECRET: z.string().min(32).optional(),
     VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
@@ -68,12 +73,15 @@ export const isLocalBackend = () => env().GAMEBASE_BACKEND === 'local';
 /** Dev sandbox and test games: local backend and Vercel previews, never production. */
 export const showDevTools = () => isLocalBackend() || env().VERCEL_ENV === 'preview';
 
+export type SignInMethod = 'discord' | 'google' | 'email';
+
 /** Settings the browser needs. Everything here is public by design. */
 export interface ClientConfig {
   backend: 'supabase' | 'local';
   supabaseUrl: string | null;
   supabaseKey: string | null;
   turnstileSiteKey: string | null;
+  signInMethods: SignInMethod[];
 }
 
 export function clientConfig(): ClientConfig {
@@ -83,5 +91,6 @@ export function clientConfig(): ClientConfig {
     supabaseUrl: e.NEXT_PUBLIC_SUPABASE_URL ?? null,
     supabaseKey: e.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? null,
     turnstileSiteKey: e.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null,
+    signInMethods: [...new Set(e.SIGNIN_METHODS.split(','))] as SignInMethod[],
   };
 }

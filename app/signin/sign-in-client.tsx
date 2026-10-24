@@ -62,22 +62,37 @@ function SupabaseSignIn({ next }: { next: string }) {
     } else setState('sent');
   };
 
+  const methods = new Set(config.signInMethods);
+  const oauthCount = Number(methods.has('discord')) + Number(methods.has('google'));
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-2">
-        <Button size="lg" onClick={() => oauth('discord')}>
-          Continue with Discord
-        </Button>
-        <Button size="lg" variant="ghost" onClick={() => oauth('google')}>
-          Continue with Google
-        </Button>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="h-px flex-1 bg-rule" />
-        <span className="label">or email</span>
-        <span className="h-px flex-1 bg-rule" />
-      </div>
-      {state === 'sent' ? (
+      {oauthCount > 0 && (
+        <div className="grid gap-2">
+          {methods.has('discord') && (
+            <Button size="lg" onClick={() => oauth('discord')}>
+              Continue with Discord
+            </Button>
+          )}
+          {methods.has('google') && (
+            <Button
+              size="lg"
+              variant={methods.has('discord') ? 'ghost' : 'primary'}
+              onClick={() => oauth('google')}
+            >
+              Continue with Google
+            </Button>
+          )}
+        </div>
+      )}
+      {oauthCount > 0 && methods.has('email') && (
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-rule" />
+          <span className="label">or email</span>
+          <span className="h-px flex-1 bg-rule" />
+        </div>
+      )}
+      {!methods.has('email') ? null : state === 'sent' ? (
         <p className="border border-green/50 px-4 py-3 text-sm">
           Check your inbox: we sent a sign-in link to <strong>{email}</strong>.
         </p>

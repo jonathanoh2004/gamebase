@@ -18,7 +18,12 @@ test('three friends play Camel Up live; a reload and a spectator see the same bo
     for (const other of table.filter((p) => p !== actor)) {
       await expect(other.locator('[data-your-turn]')).not.toHaveText(/^Your turn/);
     }
-    if (move === 'ticket') await actor.locator('[data-tent]:not([disabled])').first().click();
+    if (move === 'ticket') {
+      await actor
+        .getByRole('button', { name: /^Take the .* ticket worth/ })
+        .first()
+        .click();
+    }
     if (move === 'roll') await actor.getByTestId('pyramid').click();
     if (move === 'tile') {
       await actor

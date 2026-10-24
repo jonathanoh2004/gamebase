@@ -1,6 +1,6 @@
 # Gamebase: design spec
 
-**Status:** draft v0.2. Your answers are folded in (§14 logs the decisions), and §8 on security and privacy is new. Nothing is built yet. Once you sign off, this becomes the build brief: I build the base site (M0–M3), then we port Camel Up together (M4).
+**Status:** v1.0, built. The base site (M0–M3) and the Camel Up port (M4) exist and are tested on the local stack. §11 shows what's done and what's left, and §14 logs the decisions. Where this spec and the code disagree, the code wins: fix the spec.
 
 **Companion doc:** [PORTING.md](PORTING.md), the playbook I follow when you hand me a game.
 
@@ -10,7 +10,7 @@
 
 - **What it is:** a private, invite-only web hub of board games ported from their physical versions. Friends play live in shared rooms, mostly on laptops, with phones fully supported.
 - **How a game gets in:** you send me the rulebook (PDF or Markdown) and photos of the board and pieces, and I port it as code by following PORTING.md. The site itself has no importer.
-- **Stack:** Next.js 16, React 19 and TypeScript on Vercel. Supabase for auth, Postgres and realtime. anime.js 4.5 for all motion. CSS 3D by default, and Three.js only where a game earns it.
+- **Stack:** Next.js 16, React 19 and TypeScript on Vercel. Supabase for auth, Postgres and realtime. anime.js 4.5 for all motion. CSS 3D by default, and Three.js only where a game earns it (none has yet).
 - **Multiplayer:** the server has the final say. Each game's rules are a pure TypeScript engine. A Vercel function checks every move, Postgres stores the game state, and Supabase Realtime tells clients to sync. Hidden information never leaves the server.
 - **Motion:** engines emit events ("die rolled 2", "stack moved 3→5"), and each game's UI turns them into anime.js choreography. Nothing on the board teleports.
 - **Look:** dark, graphic and technical, in the spirit of animejs.com. Neutral chrome, saturated piece colors, mono labels, a visible grid, and motion as the personality. No UI kit, no decorative gradients, no glass.
@@ -87,8 +87,8 @@ animejs.com is blocked from my build environment, so this section comes from mem
 
 ### 2.5 3D policy
 
-- **Default stage, "2.5D tabletop":** the board is DOM/SVG under a CSS `perspective`, gently tilted, with contact shadows under the pieces. anime.js animates `rotateX` and `translateZ` directly, which is cheap and crisp on phones.
-- **Real 3D where it earns its place:** Three.js through React Three Fiber, for one or two hero objects per game. Camel Up's dice pyramid is the obvious first one. anime.js 4.5 ships a Three.js adapter, so the same timelines drive DOM and 3D objects. 3D scenes load lazily, never block play, and fall back to 2D on low-power devices or with reduced motion.
+- **Default stage:** the board is flat DOM/SVG on a fixed-size stage. Individual pieces that deserve depth are real CSS 3D objects, and anime.js animates their `rotateX`/`rotateY` directly, which is cheap and crisp on phones. In Camel Up those are the dice (cubes that tumble out of the pyramid) and the pyramid itself.
+- **Real 3D where it earns its place:** Three.js through React Three Fiber, for one or two hero objects per game. Such scenes would load lazily, never block play, and fall back to 2D on low-power devices or with reduced motion. Camel Up turned out not to need any.
 - **Art style:** flat-shaded and matte, in the same palette, so 3D objects look like part of the same world.
 
 ---
@@ -99,7 +99,7 @@ animejs.com is blocked from my build environment, so this section comes from mem
 |---|---|---|
 | App framework | Next.js 16 (App Router), React 19, TypeScript (strict) | Native to Vercel. Move checking runs in route handlers next to the UI, and both import the same engines. |
 | Motion | anime.js 4.5 | Timelines, springs, staggers, SVG motion paths, draggables and FLIP layout animation (`createLayout`). `createScope` handles React cleanup, and the Three.js adapter lets one timeline drive DOM and 3D. |
-| 3D (optional, per game) | three, React Three Fiber 9, drei | Loaded only on screens that use it. |
+| 3D (optional, per game) | three and React Three Fiber, if a game ever needs them | Not installed: CSS 3D has covered everything so far. |
 | Styling | Tailwind CSS 4 with our own `@theme` tokens | Quick to write, and every value comes from our design tokens. The generic AI look comes from component kits and their defaults, and we use neither. |
 | Headless components | Base UI (unstyled) | Correct focus and keyboard handling for dialogs, popovers and menus, without imposing any visuals. |
 | Client state | Zustand | Holds the room session, sync state and the animation queue. |
@@ -107,10 +107,11 @@ animejs.com is blocked from my build environment, so this section comes from mem
 | Auth | Supabase Auth: Discord, Google and email magic links | No passwords to store or leak, and one click for most people. |
 | Email delivery | Resend (free tier) as Supabase's mail sender | Supabase's built-in mailer is for testing and only sends to your own team. |
 | Bot protection | Cloudflare Turnstile (free) | Stops scripted sign-ins and email spam. |
-| Database | Supabase Postgres, through Drizzle ORM and Supabase's connection pooler | Typed schema and migrations, parameterized queries, and real transactions with row locks for moves. |
+| Database | Supabase Postgres, through Drizzle ORM on postgres.js and Supabase's connection pooler (transaction mode) | Typed queries with bound parameters, and real transactions with row locks for moves. Migrations are hand-written SQL. |
 | Realtime | Supabase Realtime: private Broadcast channels and Presence | New-move doorbells, lobby presence, live hovers and emotes. |
 | Hosting | Vercel Hobby, with a preview deploy per branch | Every port gets a preview URL you can playtest before it ships. |
-| Tests | Vitest for engines and simulations, Playwright for multi-browser games | Engines are pure, so most tests are fast and need no browser. |
+| Local stack | Embedded Postgres, a dev sign-in and SSE realtime (`GAMEBASE_BACKEND=local`) | The whole app runs and is tested with no cloud accounts. It refuses to start on a production deployment. |
+| Tests | Vitest for engines, simulations and database code (on a throwaway embedded Postgres), Playwright for multi-browser games | Engines are pure, so most tests are fast and need no browser. |
 | Tooling | pnpm, Biome, GitHub Actions, Dependabot | |
 
 **Considered and rejected:**
@@ -147,13 +148,13 @@ The browser never connects to Postgres. It talks to our API over HTTPS, and to S
    2. Runs the engine: `decide`, then `evolve` for each resulting event.
    3. Appends a row to `match_actions`, writes the new state and bumps `version`.
 4. A database trigger on `match_actions` calls `realtime.send()`, so the room's private channel gets a doorbell `{ version: 42 }` exactly when the move commits. A move that rolls back never rings. The doorbell carries no game data.
-5. The acting player gets their **frames** in the POST response. A frame is an `{ event, view }` pair, redacted for that seat. Everyone else hears the doorbell and calls `GET /api/rooms/:id/sync?after=41`, and the server replays the new events from the previous saved state to build each viewer's frames.
+5. The acting player gets their **frames** in the POST response. A frame is `{ version, index, event, view }`, redacted for that seat. Everyone else hears the doorbell and calls `GET /api/rooms/:id/sync?after=41`, and the server replays the new events from the previous saved state to build each viewer's frames.
 6. Each client's **director** plays its frames in order (§6). When you click, your UI responds immediately (press states, a tile lifting), but the board only changes when the server's frames arrive.
 
 Why this shape:
 
 - **Hidden information is safe by construction.** Clients only ever receive `viewFor(state, seat)`. The full state and the random seed never leave the server.
-- **Missed messages can't desync anyone.** Realtime is only a doorbell; the source of truth is "frames since version N." Reconnecting, refreshing and switching devices all take the same path. Clients poll every 15 seconds or so while the websocket is down.
+- **Missed messages can't desync anyone.** Realtime is only a doorbell; the source of truth is "frames since version N." Reconnecting, refreshing and switching devices all take the same path. Clients poll every 8 seconds while the websocket is down, and every 30 seconds as a safety net.
 - **Races are boring.** The row lock puts moves in order. A stale `expectedVersion` gets a 409; the client then syncs and shows what changed.
 - **Replays come free.** The seed plus the action log replays any game deterministically. That drives the results screen, bug reports and tests.
 
@@ -166,7 +167,7 @@ Every random draw comes from a seeded generator: `rng = PRNG(matchSeed, version)
 - **States:** `lobby → playing → finished`, or `abandoned`.
 - **Lobby:** the host picks game options and seats. Other members open the room's link, pick a color and ready up. To bring in someone new, the host sends a one-time invite that makes them a member and drops them into this lobby (§8.2).
 - **Spectators:** members with the room link can watch, if the host allows it.
-- **Disconnects:** a player who drops keeps their seat. After a timeout, the host can hand the seat to another member or end the game.
+- **Disconnects:** a player who drops keeps their seat and picks up where they left off, from any device. The host can close the room to end a game. Handing a seat to someone else is on the later list.
 - **Rematch:** starts a new match in the same room with the same seats.
 - **Testing only, for now:** bots and pass-and-play (every seat on one screen) live in the dev sandbox (§9). Either can be opened up to players later.
 
@@ -177,24 +178,26 @@ Every random draw comes from a seeded generator: `rng = PRNG(matchSeed, version)
 Every game is one folder:
 
 ```
-games/camel-up/
-  rules.md          our normalized rules: numbered, testable, in our own words
-  manifest.ts       name, player counts, length, options, cover, engine version
-  engine/           PURE TypeScript: no React, DOM, network, Math.random or Date
-    types.ts        State, Action, Event, View
-    setup.ts        initial state from seats + options + rng
-    rules.ts        decide() and evolve()
-    views.ts        viewFor() and redactEvent()
-    index.ts        exports the GameEngine
-  ui/               React + anime.js
-    Board.tsx       renders a view on the stage
-    layout.ts       view → resting place of every piece (the single source of positions)
-    choreography.ts event → animation
-    pieces/         camels, dice, tiles, cards as SVG/React components
-    3d/             optional, lazy-loaded R3F scenes
-  assets/           our own art (never scans or traces of the original)
-  source/           your rulebook and photos: reference only, never served by the site
-  tests/            rule tests (named by rule ID), simulations, golden replays
+games/
+  manifests.ts        library metadata for every game: name, player counts, length, tags
+  engines.ts          id → engine, for the server and the sandbox
+  client.tsx          id → board, cover and options UI, all dynamic imports
+  camel-up/
+    rules.md          our normalized rules: numbered, testable, in our own words
+    howto.ts          the short overview on the game page
+    engine/           PURE TypeScript: no React, DOM, network, Math.random or Date
+      types.ts        State, Action, Event, View
+      track.ts        board logic shared by rules and UI: stacks, rankings, tile rules
+      index.ts        setup, decide, evolve, viewFor, redactEvent, outcome → the GameEngine
+    ui/               React + anime.js
+      board.tsx       renders a view on the stage, with the action bar and player panels
+      geometry.ts     board coordinates: spaces, tents, piles, pyramid
+      layout.ts       view → resting place of every piece (the single source of positions)
+      choreography.ts event → animation
+      art.tsx, camel.tsx, pieces.tsx, pyramid.tsx       our own SVG and CSS 3D art
+      overlay.tsx, panels.tsx, action-bar.tsx, cover.tsx, options.tsx
+    tests/            rule tests (named by rule ID), simulations, a golden replay
+    source/           your rulebook and photos: reference only, never served by the site
 ```
 
 The engine interface (trimmed):
@@ -203,19 +206,20 @@ The engine interface (trimmed):
 type Seat = number;                      // 0..n-1
 type Viewer = Seat | "spectator";
 
-interface GameEngine<State, Action, Event, View, Options = {}> {
+interface GameEngine<State, Action, Event, View, Options> {
   id: string;                            // "camel-up"
   version: number;                       // bump when State changes shape
   players: { min: number; max: number };
-  actionSchema: ZodType<Action>;         // checked before decide()
+  actionSchema: ZodType<Action>;         // strict; checked before decide()
+  optionsSchema: ZodType<Options>;       // room options, e.g. { hideMoney }
 
-  setup(ctx: { seats: Seat[]; options: Options; rng: Rng }): State;
+  setup(ctx: { seats: SeatInfo[]; options: Options; rng: Rng }): State;
   activeSeats(state: State): Seat[];     // who may act now (several = simultaneous)
   legalActions(state: State, seat: Seat): Action[];               // UI hints, bots, fuzzing
   decide(state: State, action: Action, ctx: { seat: Seat; rng: Rng }): Event[]; // or throws IllegalAction
   evolve(state: State, event: Event): State;                      // pure, no randomness
   viewFor(state: State, viewer: Viewer): View;                    // drop what this viewer can't see
-  redactEvent(event: Event, viewer: Viewer): Event | null;
+  redactEvent(event: Event, viewer: Viewer, after: State): Event | null;
   outcome(state: State): Outcome | null;                          // final standings once over
 }
 ```
@@ -223,19 +227,22 @@ interface GameEngine<State, Action, Event, View, Options = {}> {
 The UI side:
 
 ```ts
-interface GameUI<View, Action, Event> {
-  Board: ComponentType<{ view: View; me: Viewer; act: (a: Action) => void }>;
-  layout(view: View): Record<PieceId, Placement>;   // x, y, z, rotation, scale
-  choreography: { [T in Event["type"]]?: Choreo<Extract<Event, { type: T }>> };
-  Rules: ComponentType;                              // in-game rules reference
+// What a board receives (games/client.tsx)
+interface BoardProps {
+  session: GameSession;            // a live room, or the in-browser sandbox
+  players: MatchPlayer[];          // names, colors and avatars by seat
+  mode: "live" | "sandbox";
 }
 
-type Choreo<E> = (event: E, stage: Stage) => {
-  pre?: Timeline;        // before the board changes: shake, roll, reveal
-  travel?: TravelStyle;  // how moved pieces reach their new spot: hop, fly, slide, flip
-  post?: Timeline;       // after landing: coin pop, score tick, toast
-};
+// Inside the board, the director plays frames into the view React renders.
+const { view, seat, busy, stageRef, skip } = useFramePlayer(session, {
+  layout,   // view → Record<PieceId, Placement>: x, y, z, rotation, scale
+  plan,     // (event, prev, next) → { pre?, travel?, post? }
+  onFrame,  // after each frame: the event log, sounds
+});
 ```
+
+`pre` runs before the board changes (shake, roll, reveal), `travel` decides how moved pieces get home (hop, fly, slide), and `post` is the follow-through (coin pop, score tick, overlay).
 
 **Rules that keep engines honest:**
 
@@ -243,8 +250,8 @@ type Choreo<E> = (event: E, stage: Stage) => {
 - **Import boundary.** Biome blocks `engine/` from importing React, Next, Supabase or any UI code.
 - **No hidden randomness.** The simulation harness runs engines with `Math.random` and `Date` rigged to throw. Any randomness or clock read outside the seeded `rng` fails tests.
 - **Simultaneous turns.** When several seats choose at once, `activeSeats` returns all of them. The engine holds their hidden choices until everyone has picked.
-- **Shared runtime.** The game-agnostic runtime handles seats, turn enforcement, versions, persistence, frames, timeouts and test bots, so games never touch any of that.
-- **Registry.** `games/index.ts` lists every manifest. Each game's UI is a dynamic import, so the homepage never ships every game's code.
+- **Shared runtime.** The game-agnostic runtime handles seats, turn enforcement, versions, persistence and frames, so games never touch any of that. Test bots live in the sandbox.
+- **Registry.** `games/manifests.ts` lists every game, `games/engines.ts` maps ids to engines, and `games/client.tsx` maps ids to boards through dynamic imports, so the homepage never ships every game's code.
 
 ---
 
@@ -272,20 +279,21 @@ for each frame { event, view }:
   4. post     follow-through (coin pops, counters tick, a toast for big moments)
 ```
 
-- **Catch-up:** frames queue while one plays. If the queue backs up (you looked away, or your laptop slept), the director speeds up, and past a threshold it jumps straight to the latest view.
-- **Control:** tapping skips to the end of the current frame. Playback speed (1×, 1.5× or 2×) is a per-user setting.
-- **Reduced motion:** with `prefers-reduced-motion`, travel becomes 150 ms crossfades, and shakes and spins are dropped.
-- **Cleanup:** everything runs inside `createScope`, so leaving the screen reverts cleanly and leaks nothing.
+- **Catch-up:** frames queue while one plays. When moves back up (you looked away, or your laptop slept), the director speeds up: 1.4× with one move waiting, 2.2× with three. With more than four moves queued it jumps straight to the latest view. One move can emit many frames (Camel Up's final roll emits about twenty), and they count as one move.
+- **Control:** a Skip button finishes the current frame. The director has a playback-speed control; a per-user speed setting is on the later list.
+- **Snapshots win:** a fresh snapshot (a reconnect, or the sandbox switching seats) replaces whatever frame is playing. The frame in flight stops touching state.
+- **Reduced motion:** with `prefers-reduced-motion`, travel becomes a 160 ms crossfade, and shakes, flights and spins are dropped.
+- **Cleanup:** everything runs inside `createScope`, so leaving the screen reverts cleanly and leaks nothing. Commits never run inside React's own render or effects.
 
 ### 6.3 Shared motion kit (`lib/motion`)
 
 Every game gets:
 
-- `hop(path)`: arcs with squash and stretch.
-- `flyTo(target)`: arcs with scale and spin.
-- `flip(card)`, `countUp(n)`, `pop`, `shake` and `trail`.
-- Stagger presets and the director itself.
-- A dev-only frame inspector: scrub, slow motion and replay any frame.
+- `hop` and `arc`: travel along a path, with squash and stretch.
+- `pop`, `shake`, `countUp`, `floatText` (the "+5" tags) and `staggerIn`.
+- Motion tokens (durations, eases, springs) and the director itself.
+
+On the later list: `flip`, `trail`, and a frame inspector in the sandbox (scrub, slow motion, replay).
 
 Game-specific choreography builds on these, so a new game only writes its hero moments from scratch.
 
@@ -295,6 +303,8 @@ Over Realtime Broadcast (never stored), other players' hovers show up as faint o
 
 Games mark private targets so their hovers are never broadcast. For example, in Camel Up, which camel you're about to back for the overall win must stay secret.
 
+Built so far: lobby presence (who's in the room). The hover and emote messages are defined and validated (`lib/realtime/messages.ts`), but no game shows them yet.
+
 ---
 
 ## 7. Data model (Postgres)
@@ -303,9 +313,9 @@ Games mark private targets so their hovers are never broadcast. For example, in 
 |---|---|---|
 | `profiles` | `id` (the auth user), `display_name`, `avatar_seed`, `color`, `role` | `role` is `pending`, `member`, `owner` or `revoked`. No email or provider data is copied here. |
 | `invites` | `token_hash`, `created_by`, `room_id` (optional), `expires_at`, `used_by`, `used_at` | One-time member invites. Only a hash of each token is stored, so a database leak exposes no working links. |
-| `rooms` | `id` (random UUID, also the link), `code` (display label), `game_id`, `host_id`, `status`, `locked`, `options`, timestamps | `status` is `lobby`, `playing`, `finished` or `abandoned`. |
-| `room_seats` | `room_id`, `seat`, `user_id` (or a test bot), `color`, `ready` | |
-| `matches` | `id`, `room_id`, `engine_version`, `seed`, `state`, `version`, `outcome`, timestamps | `seed` and `state` never leave the server. |
+| `rooms` | `id` (random UUID, also the link), `code` (display label), `game_id`, `host_id`, `status`, `locked`, `allow_spectators`, `options`, `lobby_version`, `current_match_id`, timestamps | `status` is `lobby`, `playing`, `finished` or `abandoned`. Bumping `lobby_version` rings the lobby doorbell. |
+| `room_seats` | `room_id`, `seat`, `user_id`, `color`, `ready` | |
+| `matches` | `id`, `room_id`, `engine_version`, `seed`, `seats`, `state`, `version`, `outcome`, timestamps | `seed` and `state` never leave the server. `seats` keeps names and colors as they were at the start, so history survives an account deletion. |
 | `match_actions` | `match_id`, `version`, `seat`, `action`, `events`, `state_after`, `created_at` | Append-only. Frames, replays and debugging all come from here. |
 | `rate_limits` | `key`, `window_start`, `count` | Counters for the rate limiter (§8.3). |
 
@@ -338,18 +348,18 @@ Friends-only doesn't lower the bar. The site is on the public internet, so it's 
 | Risk | Control |
 |---|---|
 | **SQL injection** | All queries go through Drizzle with bound parameters; no SQL is ever assembled from strings. Lint and CI reject raw-SQL escape hatches (`sql.raw`), and our database functions contain no dynamic SQL. |
-| **Reading other people's data** | Our tables sit in a private `app` schema that Supabase's public Data API doesn't expose, so the browser can't query the database at all. Every API route goes through the same authorization helpers (`requireMember`, `requireSeat`, `requireHost`). The server's database role can reach only our tables, not Supabase's `auth` schema, and row-level security is on everywhere as a second wall. |
+| **Reading other people's data** | Our tables sit in a private `app` schema that Supabase's public Data API doesn't expose, so the browser can't query the database at all. Every API route goes through one wrapper (`route()` in `lib/http/route.ts`) that declares its auth level, and the room and match services check seats and host rights inside their transactions. The server's database role can reach only our tables, not Supabase's `auth` schema, and row-level security is on everywhere as a second wall. |
 | **Leaking hidden game information** | Per-seat views and event redaction (§5), with automated leak tests. Hovers on private choices are never broadcast (§6.4). |
-| **Stolen or forged sessions** | The server verifies the Supabase token on every request and never trusts a user ID sent by the browser. Auth is checked wherever data is read, not just in Next.js's request proxy. Sign-in uses PKCE and an exact allowlist of redirect URLs. |
+| **Stolen or forged sessions** | The server verifies the Supabase token on every request and never trusts a user ID sent by the browser. Auth is checked wherever data is read, not just in Next.js's request proxy. OAuth uses PKCE; email links are single-use token hashes verified on the server. Both rely on an exact allowlist of redirect URLs, and after sign-in we only redirect to same-site paths. |
 | **Cross-site scripting** | React escapes all text, and lint bans `dangerouslySetInnerHTML`. Display names are length- and character-checked and always rendered as plain text. A strict Content Security Policy with per-request nonces allows no third-party scripts except Turnstile on the sign-in page. |
 | **Cross-site requests and clickjacking** | Endpoints that change anything accept only JSON with a same-origin `Origin` header. Cookies are `SameSite=Lax`, and the site refuses to load inside frames. |
 | **Transport and headers** | HTTPS only, with HSTS, `nosniff`, a strict referrer policy, and a permissions policy that turns off the camera, microphone and location. |
 | **Malformed or hostile input** | Zod schemas check every parameter, query and body and reject unknown fields, and request bodies are size-capped. The engine then re-checks that the move is legal. |
 | **Spam and quota abuse** | Per-user and per-IP rate limits on every endpoint that changes anything, plus Cloudflare Turnstile on email sign-in and Supabase's own auth limits. |
 | **Spoofed realtime messages** | Channels are private: a database policy lets you join a room's channel only if you're seated in that room or allowed to watch. Peer messages (hovers, emotes) are treated as untrusted decoration: fixed IDs only, shape-checked on arrival, and never able to touch game state. |
-| **Leaked secrets** | The Supabase secret key and database URL exist only as server-side Vercel env vars. Server modules import `server-only`, so they can't end up in browser bundles. Dev and prod use separate Supabase projects and keys, and CI scans every push for secrets. |
+| **Leaked secrets** | The Supabase secret key and database URL exist only as server-side Vercel env vars. Server modules import `server-only`, so they can't end up in browser bundles. The local stack needs no keys at all, and CI scans every push for secrets. |
 | **Vulnerable dependencies** | A committed lockfile. pnpm blocks install scripts by default and is set to skip releases less than a few days old. Dependabot and `pnpm audit` run in CI, and Next.js and React security patches get applied promptly. |
-| **Exposed dev tools** | Preview deploys stay behind Vercel's login, and the dev sandbox and test bots exist only there. |
+| **Exposed dev tools** | The dev sandbox and test bots exist only on the local stack and on preview deploys, which stay behind Vercel's login. The dev sign-in refuses to run on a production deployment. |
 
 ### 8.4 Privacy
 
@@ -360,8 +370,9 @@ Friends-only doesn't lower the bar. The site is on the public internet, so it's 
 
 ### 8.5 How it's verified
 
-- **An authorization test matrix:** every endpoint is called as signed out, non-member, member, seated player, the player whose turn it is, and host. Each must allow or refuse exactly as designed.
-- **Hostile-input tests:** SQL metacharacters, oversized payloads and malformed actions must be rejected cleanly.
+- **An authorization test matrix** (`tests/e2e/authz.spec.ts`): endpoints are called as signed out, pending, member, seated player, the player whose turn it is, spectator, host and owner. Each must allow or refuse exactly as designed, and no response may carry another player's cards or anyone's account id.
+- **Hostile-input tests** (same file): other origins, wrong content types, SQL metacharacters, oversized payloads, unknown fields and malformed actions must be rejected cleanly.
+- **Leak checks in simulations:** thousands of random games check that no seat's frames ever contain another seat's secrets.
 - **Supabase's Security Advisor** must come back clean (no table without row-level security, no unsafe functions) before each release.
 - **A security review** of every milestone's changes before they merge.
 
@@ -376,17 +387,18 @@ Friends-only doesn't lower the bar. The site is on the public internet, so it's 
 | `/` | **The library.** A large wordmark assembles from game-piece shapes (a die face, a camel, a tile) on a staggered spring. Below it sits a grid of game covers. Each cover is a tiny looping scene of that game's real pieces, playing on hover or focus (on phones, when it scrolls into view). Mono metadata under each: `3–8 PLAYERS · 30 MIN · DICE · BETTING`. A strip above the grid lists rooms you're in. |
 | `/games/[slug]` | **Game page:** animated cover, a 60-second overview, players and length, and **Create room**. |
 | `/r/[id]` | **The room.** One route that morphs between lobby, game and results, so the lobby's seats become the in-game player panels. |
-| `/me` | **Profile:** name, avatar, preferred colors, match history, sign out everywhere, delete account. |
-| `/admin` | **Owner only:** members, open invites, revoke access, close rooms. |
-| `/dev/[slug]` | **Dev sandbox** (preview deploys only): every seat on one screen (pass-and-play), test bots, preset scenarios ("leg about to end"), the frame inspector and speed controls. Ports get built here, and you can playtest early here. |
+| `/me` | **Profile:** name, color, avatar, your email (only you see it), sign out everywhere, delete account. Match history is on the later list. |
+| `/admin` | **Owner only:** members (revoke, restore) and invite links (create, revoke). |
+| `/dev/[slug]` | **Dev sandbox** (local stack and preview deploys only): every seat on one screen, with pass-and-play that follows the turn. You can view as any seat or a spectator, run test bots or autoplay, and inspect the full server state. Ports get built here, and you can playtest early here. Preset scenarios and a frame inspector are on the later list. |
 
 **Game screen layout:**
 
 - Laid out for laptops first. The board takes center stage, with player panels along the edge showing score, holdings and whose turn it is.
 - The current player gets an action bar with legal options highlighted.
-- A compact event log is always visible, and the rules reference is one tap away.
-- When the tab is in the background, its title and favicon flag that it's your turn.
-- On phones, the board sits on top, players become a horizontal strip, and actions live in a bottom sheet.
+- The board is sized so that it and the action bar always fit the window.
+- A compact event log is always visible. The rules overview lives on the game page.
+- When the tab is in the background, its title flags that it's your turn.
+- On phones, the board sits on top. The action bar under it offers every action as a full-size button, and the player panels form a compact grid below.
 
 ---
 
@@ -394,17 +406,24 @@ Friends-only doesn't lower the bar. The site is on the public internet, so it's 
 
 ```
 app/                Next.js routes: hub, room, invite, profile, admin, dev sandbox, api/
-components/         design-system components (Button, Panel, Seat, Tag, Dialog…)
+components/         design-system components (Button, Panel, Dialog, Avatar…)
 lib/
-  auth/             session checks, authorization helpers, rate limiter
-  engine/           game contract types, PRNG, test harness, test bot, simulation runner
+  auth/             sessions, authorization, rate limiter, dev sign-in (local only)
+  http/             the API route wrapper, errors, safe redirects
+  db/               Drizzle schema and the database client
+  engine/           game contract types, PRNG, simulation harness
   runtime/          server match service: lock, apply, persist, build frames
-  client/           room session store, sync, realtime, director
-  motion/           anime.js kit: presets, director, stage, reduced motion
+  server/           rooms, lobby, invites, members
+  client/           room controller (sync + realtime), sandbox session, frame player
+  realtime/         channel client, local SSE hub, message schemas
+  motion/           anime.js kit: tokens, director, stage, reduced motion
+  security/         Content Security Policy
   supabase/         browser and server clients
-games/              one folder per game (§5) + games/index.ts registry
-db/                 Drizzle schema and SQL migrations (roles, RLS, realtime policies, triggers)
-docs/               this spec, PORTING.md
+games/              one folder per game (§5), plus the manifest, engine and UI registries
+db/                 SQL migrations (roles, RLS, realtime policies, triggers) and the local shim
+scripts/            the local stack, migrations, make-owner
+tests/              database test setup and Playwright end-to-end tests
+docs/               this spec, PORTING.md, SETUP.md
 .claude/skills/     port-game skill: PORTING.md as a runnable checklist
 CLAUDE.md           conventions for any Claude session working in this repo
 ```
@@ -417,14 +436,14 @@ This is one Next.js app rather than a monorepo, which is simpler for Vercel and 
 
 Each milestone ends with something you can click on a Vercel preview.
 
-| # | Milestone | Done when |
-|---|---|---|
-| M0 | **Scaffold.** Next.js app, strict TypeScript, Biome, Vitest, Playwright, GitHub Actions CI, the Vercel project, Supabase projects (dev and prod), env vars, CLAUDE.md. Plus the security baseline: headers and CSP, secret scanning, dependency audit, the private schema and a least-privilege database role. | CI is green and every push gets a preview deploy. |
-| M1 | **Look and motion.** Tokens, type, components, the motion kit, and the library and game pages filled with placeholder games. | **You sign off on the look and feel.** This is the "not AI-looking" checkpoint. |
-| M2 | **Accounts, membership and rooms.** Discord, Google and email sign-in; invite-only membership; profiles; your owner page; rooms with links; a live lobby with seats, colors, ready-up and host controls (kick, lock). | Two members meet in a lobby and see each other live, a non-member gets nothing, and the authorization test matrix passes. |
-| M3 | **Game runtime.** Engine contract, PRNG, the match service with locking, action and sync endpoints, the realtime doorbell, the client store and director, the dev sandbox with pass-and-play and test bots, and results and rematch. All of it is proven end to end on a tiny test game (dice plus one hidden choice) that never appears in the library. | A scripted Playwright game with three browsers runs start to finish, surviving a mid-game refresh. |
-| M4 | **Camel Up**, with you, following PORTING.md: rules checkpoint, engine and tests, art and choreography, playtest, polish. | You've played a full game with friends on the production URL. |
-| M5 | **Hardening.** A mobile pass, accessibility, performance budgets, error and empty states, reconnect edge cases, optional turn timers, the Supabase keep-alive, and a full security review. | Accessibility and performance checks pass, and a week of real use produces no stuck or desynced games. |
+| # | Milestone | Done when | Status |
+|---|---|---|---|
+| M0 | **Scaffold.** Next.js app, strict TypeScript, Biome, Vitest, Playwright, GitHub Actions CI, the Vercel project, the Supabase project, env vars, CLAUDE.md. Plus the security baseline: headers and CSP, secret scanning, dependency audit, the private schema and a least-privilege database role. | CI is green and every push gets a preview deploy. | Built. The Vercel and Supabase projects need your accounts ([SETUP.md](SETUP.md)). CI hasn't run on GitHub yet. |
+| M1 | **Look and motion.** Tokens, type, components, the motion kit, and the library and game pages. | **You sign off on the look and feel.** This is the "not AI-looking" checkpoint. | Built; your review is open. |
+| M2 | **Accounts, membership and rooms.** Discord, Google and email sign-in; invite-only membership; profiles; your owner page; rooms with links; a live lobby with seats, colors, ready-up and host controls (kick, lock). | Two members meet in a lobby and see each other live, a non-member gets nothing, and the authorization test matrix passes. | Built and passing on the local stack. The Supabase sign-in paths can only be tried on your project. |
+| M3 | **Game runtime.** Engine contract, PRNG, the match service with locking, action and sync endpoints, the realtime doorbell, the client store and director, the dev sandbox with pass-and-play and test bots, and results and rematch. All of it is proven on a tiny test game that never appears in the library. | A scripted Playwright game with three browsers runs start to finish, surviving a mid-game refresh. | Done. |
+| M4 | **Camel Up**, with you, following PORTING.md: rules checkpoint, engine and tests, art and choreography, playtest, polish. | You've played a full game with friends on the production URL. | Engine, board and choreography are done and tested. The rulings in `rules.md` and a real playtest wait on you. |
+| M5 | **Hardening.** A mobile pass, accessibility, performance budgets, error and empty states, reconnect edge cases, optional turn timers, the Supabase keep-alive, and a full security review. | Accessibility and performance checks pass, and a week of real use produces no stuck or desynced games. | Partly done: the phone layout, reconnects and a security review. Accessibility and performance budgets and turn timers remain. |
 
 **Later:**
 
@@ -460,14 +479,14 @@ If we ever get close to a limit (we won't with friends), the first upgrade is Su
 - **IP:**
   - Game mechanics are free to reuse, but artwork, rulebook text and names belong to the publishers.
   - All art is our own: inspired by the layout, never scanned or traced. `rules.md` is written in our own words.
-  - Rulebooks and photos live in the private repo under `games/<slug>/source/`, so any later session can re-read them. The site never serves them.
+  - Rulebooks and photos go under `games/<slug>/source/`, so any later session can re-read them. The folder is gitignored until the repository is private, and the site never serves it.
   - The site is invite-only and unlisted, which also fits Vercel Hobby's non-commercial terms.
 - **Deploys during a game:**
   - Engines carry a version number.
   - If a deploy changes a game's state shape in a breaking way, matches running on the old version say "this game was updated, start a rematch" instead of loading into the new engine.
   - Non-breaking fixes apply to running games.
 - **anime.js vs React:** the ownership rule (§6.1) and `createScope` cleanup prevent conflicts. If something still goes wrong, the page already shows the true state, so the worst case is a missing animation, never a wrong board.
-- **Phones and 3D:** 3D is lazy-loaded and optional, with a quality toggle. The 2.5D board is the baseline everywhere.
+- **Phones and 3D:** no game uses Three.js yet. The CSS 3D dice and pyramid run fine on phones.
 - **No timers on serverless:** Vercel functions can't run timers. Turn timeouts are therefore checked on the next request or by the daily cron, and they're off by default.
 
 ---
@@ -476,11 +495,12 @@ If we ever get close to a limit (we won't with friends), the first upgrade is Su
 
 | Question | Decision |
 |---|---|
-| Camel Up edition | 2nd edition (2018), with crazy camels; 3–8 players |
+| Camel Up edition | 2nd edition (2018), with crazy camels; 2–8 players (the box says 3–8; 2 is our addition, ruling 8 in `rules.md`) |
 | Audience | Friends only: invite-only membership, unlisted |
 | Sign-in | Discord, Google and email magic links; no guest accounts |
 | Who can invite | Any member, with one-time links; you can revoke anyone |
 | Devices | Laptop-first; phones fully supported |
 | Bots and pass-and-play | Testing tools in the dev sandbox for now |
-| Repo | Private, so rulebooks and photos can be committed for reference |
+| Repo | Private, so rulebooks and photos can be committed for reference. GitHub still lists it as public, so the sources stay gitignored until it's private. |
+| Sign-in buttons | Configurable with `SIGNIN_METHODS`, so unused providers don't show |
 | Security | Built as if strangers will probe it (§8) |

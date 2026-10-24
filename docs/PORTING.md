@@ -1,6 +1,6 @@
 # Porting playbook
 
-This is how a physical board game becomes a Gamebase game. It's the process I follow every time. Once you approve it, it also becomes a Claude Code skill (`.claude/skills/port-game/`), so any Claude session on this repo can run it when you say "port this."
+This is how a physical board game becomes a Gamebase game. It's the process I follow every time. It's also a Claude Code skill (`.claude/skills/port-game/`), so any Claude session on this repo can run it when you say "port this."
 
 The platform side (engine contract, animation system, data model) is in [DESIGN.md](DESIGN.md).
 
@@ -23,7 +23,7 @@ What to send:
 - **How your table plays:** house rules, variants, and the player counts you care about.
 - **Optional:** the moment you love about the game, and anything the digital version should do better than the cardboard.
 
-Attach the files to your message, or commit them under `games/<slug>/source/`. That folder lives in the private repo, so any later session can re-read the originals, and the site never serves it. If your Claude client won't attach a PDF, commit it there or paste the rules as Markdown.
+Attach the files to your message, or put them under `games/<slug>/source/` so any later session can re-read the originals. The site never serves that folder, and it's gitignored until the repository is private. If your Claude client won't attach a PDF, paste the rules as Markdown.
 
 ---
 
@@ -56,33 +56,36 @@ I map the rules onto the engine contract (DESIGN.md §5):
 
 ### Phase 3: Engine and tests (no UI yet)
 
-- I implement `setup`, `decide`, `evolve`, `viewFor`, `redactEvent`, `legalActions` and `outcome`.
-- **At least one test per rule, named by its ID.** For example: `R12: a camel landing on a spectator tile moves one more space in the tile's direction, and the tile's owner gets 1 coin`.
-- **Simulations:** thousands of random legal games at every supported player count. Each must finish without errors and keep its invariants: coin and piece totals add up, and nothing hidden ever shows up in another seat's view.
-- **Golden replays:** a few full games saved as seed plus actions, so any later rule change shows up as a diff.
+- I implement `setup`, `decide`, `evolve`, `viewFor`, `redactEvent`, `legalActions` and `outcome` in `engine/`, and register the engine in `games/engines.ts`.
+- **At least one test per rule, named by its ID** (`tests/rules.test.ts`). For example: `R12: a camel landing on a spectator tile moves one more space in the tile's direction, and the tile's owner gets 1 coin`.
+- **Simulations** (`tests/simulation.test.ts`, on `lib/engine/harness.ts`): many random legal games at every supported player count, with `Math.random` and `Date` rigged to throw. Each must finish without errors and keep its invariants: coin and piece totals add up, and nothing hidden ever shows up in another seat's view.
+- **Golden replays:** a full game saved as seed plus actions (a snapshot file), so any later rule change shows up as a diff.
 
 ### Phase 4: Visual brief, board and pieces (checkpoint ②)
 
-- **From your photos:** I work out the board geometry (spaces, tracks, zones), the shapes of the components and how the game uses color.
-- **An original design** in our visual language, not a reproduction of the publisher's art.
-- **`layout.ts`:** the one function that places every piece from a view.
+- **From your photos:** I work out the board geometry (spaces, tracks, zones) in `ui/geometry.ts`, plus the shapes of the components and how the game uses color.
+- **An original design** in our visual language, not a reproduction of the publisher's art: SVG and CSS 3D pieces in `ui/`.
+- **`ui/layout.ts`:** the one function that places every piece from a view.
 - **Hero moments:** the 3–5 beats that deserve custom choreography. Everything else uses the shared motion kit.
-- **You react to a static mock or a short clip** in the sandbox before I polish.
+- **You react to the sandbox** (`/dev/<slug>`) before I polish.
 
 ### Phase 5: Choreography and interaction
 
-- **`choreography.ts`:** an animation for every event type, built on the shared kit first.
+- **`ui/choreography.ts`:** an animation for every event type, built on the shared kit first.
 - **Interaction:**
-  - Legal moves highlighted, with hover previews.
-  - A confirm on actions that can't be undone.
+  - Legal moves highlighted, with previews.
+  - Select, then confirm (Enter confirms, Esc cancels), so a misclick never costs a turn.
   - Keyboard play.
-  - The phone layout.
+  - The phone layout: every action also reachable as a full-size button.
 - **Reduced-motion variants** of everything.
 
 ### Phase 6: Integrate and playtest (checkpoint ③)
 
-- **Integration:** the manifest and registry entry, plus room options (variants, player counts).
-- **A Playwright test** that plays a full multiplayer game in several browsers, including a reload mid-game.
+- **Integration:**
+  - the manifest in `games/manifests.ts`
+  - the board, cover and options in `games/client.tsx`
+  - room options (variants, player counts)
+- **A Playwright test** that plays a multiplayer game in several browsers, including a reload mid-game (see `tests/e2e/room.spec.ts`).
 - **You playtest on the preview URL:** the sandbox, plus a real room across your own browser windows. Previews stay behind Vercel's login, so friends join once the game is live in production. Your feedback goes back into `rules.md` or the choreography.
 
 ### Definition of done
@@ -99,47 +102,43 @@ I map the rules onto the engine contract (DESIGN.md §5):
 
 ---
 
-## Worked example: Camel Up (preview)
+## Worked example: Camel Up
 
-This preview is based on what I know of the 2nd edition (2018), the one we're porting. **Your rulebook replaces all of it in Phase 1.**
+The first port, built from the 2nd edition (2018) rulebook. Everything below exists in `games/camel-up/`.
+
+**Rules:** `rules.md` numbers 30 rules (R1–R30) and 4 hidden-information rules (H1–H4). It also lists 8 rulings where the book is ambiguous or silent, each marked for your review, and the digital adaptations.
 
 **Components → software**
 
 | Physical | Software |
 |---|---|
-| 16-space race track | `track: CamelId[][]`: a stack per space, bottom to top |
+| 16-space race track | `track: CamelId[][]`: a stack per space, bottom to top. A unit that crosses the line goes into `crossed`, which ends the race. |
 | 5 racing camels, plus 2 crazy camels that run backwards | A `CamelId` union. Crazy camels never count in the rankings. |
-| Pyramid with 5 racing dice and 1 grey die (picks a crazy camel and a distance) | `pyramid: { inside: DieId[] }`. Rolls come from the seeded PRNG. |
-| Leg betting tiles, a stack per color | `legTiles: Record<Color, number[]>` (the top of the stack is the next value) |
-| Spectator tiles, one per player (cheering +1, booing −1) | `spectator?: { space, side }` per player (absent while the tile is in hand) |
-| Overall winner and loser cards, placed face-down | `overall: { winner: Bet[]; loser: Bet[] }`. Colors stay **hidden** until the end. |
-| Pyramid tickets and coins | `pyramidTickets` and `coins` per player |
+| Pyramid with 5 racing dice and 1 grey die (picks a crazy camel and a distance) | `pyramid: DieId[]` (the dice still inside) and `rolled` (the dice in the tents). Rolls come from the seeded PRNG. |
+| Leg betting tickets, a stack per color | `legStacks: Record<RacingColor, number[]>`. The top of each stack is the next value: 5, 3, 2, 2. |
+| Spectator tiles, one per player (cheering +1, booing −1) | `spectator: { space, side } \| null` per player |
+| Overall winner and loser cards, placed face-down | `winnerPile` and `loserPile`. The colors are **hidden** from other seats until revealed card by card at the end. |
+| Pyramid tickets, coins and partnership cards (6+ players) | `pyramidTickets`, `coins` and `partner` per player |
 
-**Actions:**
-
-- `takeLegTile(color)`
-- `placeSpectator(space, side)`
-- `rollPyramid()`
-- `betOverall("winner" | "loser", color)`
+**Actions:** `takeTicket(color)`, `roll`, `placeSpectator(space, side)`, `bet(pile, color)`, `partner(with)`. Each is a strict Zod schema.
 
 **Events (each one gets animated):**
 
-- **A roll:** `pyramidShaken` → `dieRolled(die, value)` → `stackMoved(camels, from, to)` → `spectatorTriggered(owner, ±1)` → `coinsAwarded(seat, n, reason)`.
-- **Other actions:** `legTileTaken`, `spectatorPlaced`, and `overallBetPlaced`, whose color is redacted for every other seat.
-- **Endings:** `legEnded(ranking, payouts)` when the fifth die leaves the pyramid, then `raceFinished`, `overallRevealed(bets)` and `gameEnded(standings)`.
+- **A roll:** `pyramidTicketTaken` → `dieRolled` → `camelsMoved`. Landing on a spectator tile adds `spectatorPaid` and a second `camelsMoved`.
+- **Other actions:** `ticketTaken`, `spectatorPlaced`, `partnered`, and `betPlaced`, whose color is redacted for every other seat.
+- **Endings:** `legScored` and `legReset` when the fifth die leaves the pyramid. When a unit crosses the line: `raceFinished`, then the final `legScored`, one `overallCard` per bet in placement order, and `gameEnded`.
+- `turnPassed` after every action.
 
-**Hidden information:** only the colors of the overall bets, plus the server's seed. Everything else is public, so counting which dice are still in the pyramid is fair play, just like at the table.
+**Hidden information:** the colors of the overall bets, your finish cards, and the server's seed. With the *hide money* room option, other players' coin totals stay hidden until the end. Everything else is public, so counting which dice are still in the pyramid is fair play, just like at the table.
 
-**Hero moments:**
+**Hero moments, as built:**
 
-1. **The pyramid.** A real 3D pyramid (React Three Fiber) shakes, then a die drops out and tumbles to its face. This is the one 3D object in the game.
-2. **The stack hop.** The camel and everything riding it hop space by space along an arc, squashing on each landing. Riders lag a few frames behind, so the tower wobbles. Crazy camels run backwards with a different gait.
-3. **Spectator tiles.** Landing on one bounces the stack forward or back, and a coin arcs from the bank to the tile's owner.
-4. **End of leg.** The camels shuffle into a podium, each player's tiles flip to show their payout, and coin totals count up.
-5. **The finish.** Overall bets flip one at a time in the order they were placed, and each payout lands as it's revealed.
+1. **The pyramid roll.** A CSS 3D pyramid shakes, then the die (a real CSS 3D cube) flies out, tumbles and bounces into its tent.
+2. **The stack hop.** The unit hops space by space along arcs, squashing on each landing, with riders a beat behind.
+3. **Spectator tiles.** A landing bounces the stack forward or back (back goes *underneath*), the tile pops, and "+1" floats up on the owner's panel.
+4. **End of leg.** A payout card lists each player's tickets and totals while the coins count up. Then a "Leg N" banner, and the tickets and dice are back.
+5. **The finish.** A "Finish!" banner, then the overall piles are revealed one card at a time with their payouts, ending on the final standings.
 
-**Digital extras (each optional, off by default):**
+**Digital adaptations:** automatic bookkeeping, select-then-confirm for every action, a real random draw for the pyramid "shake", card-by-card reveals, and the *hide money* option.
 
-- **A live odds overlay for the current leg.** It's exact: it enumerates the remaining dice in a Web Worker. It also changes how the game plays, so it's off unless the host turns it on.
-- A per-leg history.
-- A "what just happened" replay of the last roll.
+**Not built yet (ideas):** a live odds overlay for the current leg (exact, by enumerating the remaining dice; off unless the host turns it on), a per-leg history, and a replay of the last roll.

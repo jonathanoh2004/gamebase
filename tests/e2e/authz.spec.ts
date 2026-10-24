@@ -34,10 +34,6 @@ async function call(
   });
 }
 
-async function json(res: APIResponse): Promise<Json> {
-  return (await res.json()) as Json;
-}
-
 test.describe
   .serial('authorization', () => {
     test('anonymous visitors get nothing', async ({ browser }) => {
