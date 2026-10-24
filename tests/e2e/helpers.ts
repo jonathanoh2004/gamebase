@@ -2,8 +2,24 @@ import { type Browser, expect, type Page, test } from '@playwright/test';
 
 export type DevUser = 'ada' | 'ben' | 'cy' | 'dee' | 'eli' | 'fay' | 'gus' | 'hal' | 'nia';
 
-/** A fresh browser context signed in as one of the local dev users (lib/auth/dev-users.ts). */
-export async function signedIn(browser: Browser, user: DevUser): Promise<Page> {
+/**
+ * A brand-new pending account (no name, no invite yet), different on every
+ * run so tests that change it can run again against the same server.
+ */
+export async function newcomer(browser: Browser): Promise<Page> {
+  // Dev user keys are lowercase letters only (DEV_USER_KEY).
+  const key = `new${Array.from({ length: 10 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join('')}`;
+  const page = await contextPage(browser);
+  const res = await page.request.post('/api/dev/session', {
+    headers: { Origin: test.info().project.use.baseURL ?? '' },
+    data: { user: key },
+  });
+  expect(res.status()).toBe(200);
+  await page.goto('/');
+  return page;
+}
+
+async function contextPage(browser: Browser): Promise<Page> {
   const { baseURL, viewport, userAgent, isMobile, hasTouch, deviceScaleFactor } =
     test.info().project.use;
   const context = await browser.newContext({
@@ -14,7 +30,12 @@ export async function signedIn(browser: Browser, user: DevUser): Promise<Page> {
     hasTouch,
     deviceScaleFactor,
   });
-  const page = await context.newPage();
+  return context.newPage();
+}
+
+/** A fresh browser context signed in as one of the local dev users (lib/auth/dev-users.ts). */
+export async function signedIn(browser: Browser, user: DevUser): Promise<Page> {
+  const page = await contextPage(browser);
   await page.goto('/signin');
   await page.getByTestId(`dev-user-${user}`).click();
   await page.waitForURL((url) => !url.pathname.startsWith('/signin'));

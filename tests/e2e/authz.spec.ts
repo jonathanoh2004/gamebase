@@ -1,6 +1,6 @@
 import { type APIResponse, expect, type Page, test } from '@playwright/test';
 import { devUserId } from '../../lib/auth/dev-users';
-import { signedIn } from './helpers';
+import { newcomer, signedIn } from './helpers';
 
 // The authorization matrix (docs/DESIGN.md §8): every API refuses the wrong
 // person, the wrong origin and the wrong shape of request, and no response
@@ -51,13 +51,14 @@ test.describe
     });
 
     test('pending accounts wait at the door', async ({ browser }) => {
-      const nia = await signedIn(browser, 'nia');
-      await expect(nia).toHaveURL(/\/(welcome|pending)/);
-      expect((await call(nia, 'GET', '/api/rooms')).status()).toBe(403);
-      expect((await call(nia, 'POST', '/api/rooms', { gameId: 'camel-up' })).status()).toBe(403);
-      expect((await call(nia, 'POST', '/api/invites', {})).status()).toBe(403);
-      await nia.goto('/');
-      await expect(nia).toHaveURL(/\/(welcome|pending)/);
+      const stranger = await newcomer(browser);
+      await expect(stranger).toHaveURL(/\/(welcome|pending)/);
+      expect((await call(stranger, 'GET', '/api/rooms')).status()).toBe(403);
+      const create = await call(stranger, 'POST', '/api/rooms', { gameId: 'camel-up' });
+      expect(create.status()).toBe(403);
+      expect((await call(stranger, 'POST', '/api/invites', {})).status()).toBe(403);
+      await stranger.goto(`/r/${NOWHERE}`);
+      await expect(stranger).toHaveURL(/\/(welcome|pending)/);
     });
 
     test('requests from other sites or in the wrong shape are refused', async ({ browser }) => {
@@ -207,13 +208,15 @@ test.describe
       const { path } = (await made.json()) as { path: string };
       const token = path.split('/').pop() ?? '';
 
-      const nia = await signedIn(browser, 'nia');
-      expect((await call(nia, 'POST', '/api/invites/redeem', { token })).status()).toBe(200);
-      expect((await call(nia, 'GET', '/api/rooms')).status()).toBe(200);
-      // Used up: a second redemption (by anyone) fails.
-      const again = await call(nia, 'POST', '/api/invites/redeem', { token });
+      const friend = await newcomer(browser);
+      expect((await call(friend, 'POST', '/api/invites/redeem', { token })).status()).toBe(200);
+      expect((await call(friend, 'GET', '/api/rooms')).status()).toBe(200);
+      // Used up: a second redemption, by anyone, fails.
+      const other = await newcomer(browser);
+      const again = await call(other, 'POST', '/api/invites/redeem', { token });
       expect(again.status()).toBe(404);
-      const bogus = await call(nia, 'POST', '/api/invites/redeem', { token: 'x'.repeat(43) });
+      expect((await call(other, 'GET', '/api/rooms')).status()).toBe(403);
+      const bogus = await call(other, 'POST', '/api/invites/redeem', { token: 'x'.repeat(43) });
       expect(bogus.status()).toBe(404);
     });
   });

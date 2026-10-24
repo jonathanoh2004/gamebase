@@ -46,6 +46,17 @@ import { PlayerPanel } from './panels';
 import { CardBack, Die, PyramidToken, SpectatorTile, Ticket } from './pieces';
 import { Pyramid } from './pyramid';
 
+/** What the log says before this screen has seen any moves (e.g. after a reload). */
+function emptyLog(view: CamelUpView, raceOver: boolean): string {
+  if (raceOver) return 'The race is over.';
+  const untouched =
+    view.leg === 1 &&
+    view.rolled.length === 0 &&
+    view.winnerPile.length + view.loserPile.length === 0 &&
+    view.players.every((p) => p.legTickets.length === 0 && !p.spectator);
+  return untouched ? 'The race is about to start.' : 'New moves show up here.';
+}
+
 // Board and action bar always fit the viewport: the stage is as wide as the
 // height left over after the page chrome (--board-chrome) allows.
 const BOARD_MAX_W = `max(300px, calc((100dvh - var(--board-chrome, 210px)) * ${STAGE_W / STAGE_H}))`;
@@ -512,7 +523,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
         <section className="col-span-full border border-rule bg-ink-1 p-3" aria-label="Game log">
           <h3 className="label mb-2">Log</h3>
           <ol className="max-h-56 space-y-1 overflow-auto text-dim text-sm" aria-live="polite">
-            {log.length === 0 && <li className="text-mute">The race is about to start.</li>}
+            {log.length === 0 && <li className="text-mute">{emptyLog(view, raceOver)}</li>}
             {log.map((line, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: append-only log
               <li key={`${i}-${line}`} className={i === 0 ? 'text-paper' : undefined}>

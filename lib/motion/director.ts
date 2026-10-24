@@ -216,12 +216,15 @@ export class Director<V, E> {
     try {
       while (this.queue.length && !this.disposed) {
         if (this.actionsQueued() > CATCH_UP_AFTER) {
-          const last = this.queue[this.queue.length - 1] as Frame<V, E>;
+          const skipped = this.queue;
+          const last = skipped[skipped.length - 1] as Frame<V, E>;
           this.finishActive();
           this.queue = [];
           this.view = last.view;
           this.show(last.view);
           this.lastKey = keyOf(last as Frame);
+          // No animation, but listeners (the event log) still hear every move.
+          for (const f of skipped) this.opts.onFrame?.(f);
           continue;
         }
         const frame = this.queue.shift() as Frame<V, E>;

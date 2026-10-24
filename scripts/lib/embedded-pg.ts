@@ -46,8 +46,9 @@ export async function startLocalDatabase(opts: {
 }): Promise<LocalDatabase> {
   const log = opts.log ?? (() => {});
   const dataDir = path.resolve(opts.dataDir);
+  // A throwaway database starts empty even if a killed run left its files behind.
+  if (!opts.persistent) await rm(dataDir, { recursive: true, force: true });
   const fresh = !existsSync(path.join(dataDir, 'PG_VERSION'));
-  if (fresh && !opts.persistent) await rm(dataDir, { recursive: true, force: true });
   await mkdir(path.dirname(dataDir), { recursive: true });
 
   const pg = new EmbeddedPostgres({
