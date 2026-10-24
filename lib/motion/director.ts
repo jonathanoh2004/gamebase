@@ -83,7 +83,8 @@ interface Completable {
 }
 
 const EPS = 0.25;
-const CATCH_UP_AFTER = 10;
+/** More actions than this queued (a tab left in the background): jump ahead. */
+const CATCH_UP_AFTER = 4;
 
 function differs(a: Placement, b: Placement) {
   return (
@@ -118,6 +119,8 @@ export class Director<V, E> {
   private skipping = false;
   private lastKey = -1;
   private speed = 1;
+  /** Bumped by every snap; a frame from an older epoch stops touching state. */
+  private epoch = 0;
   private busy = false;
 
   constructor(
@@ -146,16 +149,25 @@ export class Director<V, E> {
         : this.lastKey;
       if (key > queuedMax) this.queue.push(f);
     }
-    void this.run();
+    // Callers may be inside a React effect, where flushSync is not allowed;
+    // starting on a microtask puts every commit outside React's own work.
+    queueMicrotask(() => void this.run());
   }
 
   /** Jump straight to a view (a fresh snapshot, or the end of a backlog). */
   snap(view: V, version?: number) {
+    this.epoch++;
     this.finishActive();
     this.queue = [];
-    flushSync(() => this.opts.commit(view));
     this.view = view;
     if (version !== undefined) this.lastKey = version * 10_000 + 9_999;
+    queueMicrotask(() => {
+      if (!this.disposed && this.view === view) this.show(view);
+    });
+  }
+
+  private show(view: V) {
+    flushSync(() => this.opts.commit(view));
     this.resetOffsets();
   }
 
@@ -203,15 +215,20 @@ export class Director<V, E> {
     this.setBusy(true);
     try {
       while (this.queue.length && !this.disposed) {
-        if (this.queue.length > CATCH_UP_AFTER) {
+        if (this.actionsQueued() > CATCH_UP_AFTER) {
           const last = this.queue[this.queue.length - 1] as Frame<V, E>;
-          this.snap(last.view, last.version);
+          this.finishActive();
+          this.queue = [];
+          this.view = last.view;
+          this.show(last.view);
           this.lastKey = keyOf(last as Frame);
           continue;
         }
         const frame = this.queue.shift() as Frame<V, E>;
+        const epoch = this.epoch;
         this.skipping = false;
-        await this.play(frame);
+        await this.play(frame, epoch);
+        if (epoch !== this.epoch) continue; // a snapshot replaced it mid-play
         this.lastKey = keyOf(frame as Frame);
         this.opts.onFrame?.(frame);
       }
@@ -221,15 +238,24 @@ export class Director<V, E> {
     }
   }
 
+  /** Distinct actions waiting (one action can emit many frames). */
+  private actionsQueued(except?: number) {
+    const versions = new Set(this.queue.map((f) => (f as Frame).version));
+    if (except !== undefined) versions.delete(except);
+    return versions.size;
+  }
+
   private makeCtx(
     prev: V,
     next: V,
     stage: HTMLElement,
     ghosts: Map<string, HTMLElement>,
+    version: number,
   ): StepCtx<V> {
     const reduced = this.opts.reduced();
-    // Behind on frames? Play faster so the table catches up.
-    const speed = this.speed * (this.queue.length >= 3 ? 2.2 : this.queue.length >= 1 ? 1.4 : 1);
+    // Moves waiting behind this one? Play faster so the table catches up.
+    const behind = this.actionsQueued(version);
+    const speed = this.speed * (behind >= 3 ? 2.2 : behind >= 1 ? 1.4 : 1);
     const track = <T extends Completable>(a: T): T => {
       this.active.add(a);
       if (this.skipping) a.complete();
@@ -286,7 +312,8 @@ export class Director<V, E> {
     return ctx;
   }
 
-  private async play(frame: Frame<V, E>) {
+  private async play(frame: Frame<V, E>, epoch: number) {
+    const stale = () => epoch !== this.epoch || this.disposed;
     const stage = this.opts.stage();
     const prev = this.view;
     const next = frame.view;
@@ -299,9 +326,10 @@ export class Director<V, E> {
     const plan = this.opts.plan?.(frame.event, prev, next) ?? {};
     const ghostLayer = stage.querySelector<HTMLElement>('[data-ghost-layer]');
     const ghosts = new Map<string, HTMLElement>();
-    const ctx = this.makeCtx(prev, next, stage, ghosts);
+    const ctx = this.makeCtx(prev, next, stage, ghosts, frame.version);
 
     if (plan.pre && !ctx.reduced) await plan.pre(ctx);
+    if (stale()) return;
 
     const before = this.opts.layout(prev);
     const after = this.opts.layout(next);
@@ -319,6 +347,11 @@ export class Director<V, E> {
     }
 
     flushSync(() => this.opts.commit(next));
+    // The commit can run effects that snap to a new view; that view wins.
+    if (stale()) {
+      for (const g of ghosts.values()) g.remove();
+      return;
+    }
     this.view = next;
 
     const moves: Move[] = [];
@@ -359,6 +392,7 @@ export class Director<V, E> {
     }
 
     for (const g of ghosts.values()) g.remove();
+    if (stale()) return;
     if (plan.post && !ctx.reduced) await plan.post(ctx);
     // Whatever happened above, every piece ends exactly where React put it.
     for (const m of moves) utils.set(m.motion, { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 });

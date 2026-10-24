@@ -4,17 +4,27 @@ import { utils } from 'animejs';
 import type { FramePlan, Move, StepCtx } from '@/lib/motion/director';
 import { floatText, pop, shake } from '@/lib/motion/kit';
 import { DUR, pieceSpring } from '@/lib/motion/tokens';
-import { type CamelUpEvent, type CamelUpView, TRACK_LENGTH } from '../engine/types';
+import {
+  type CamelUpEvent,
+  type CamelUpView,
+  type Pile,
+  type RacingColor,
+  TRACK_LENGTH,
+} from '../engine/types';
 import { crossedPoint, groundPoint, PYRAMID_CENTER } from './geometry';
 import { layoutCamelUp, STEP } from './layout';
+import { camelName } from './palette';
 
 // Event → animation (docs/DESIGN.md §6). Hero moments: the pyramid roll, the
 // stack hop, spectator bounces, leg scoring and the final reveal.
 
+type OverallCard = Extract<CamelUpEvent, { type: 'overallCard' }>;
+
 export type Overlay =
   | { kind: 'banner'; title: string; sub?: string; tone?: 'gold' | 'plain' }
   | { kind: 'leg'; event: Extract<CamelUpEvent, { type: 'legScored' }> }
-  | { kind: 'card'; event: Extract<CamelUpEvent, { type: 'overallCard' }> };
+  | { kind: 'pile'; pile: Pile; camel: RacingColor | null; cards: OverallCard[] }
+  | { kind: 'final'; winner: RacingColor; loser: RacingColor };
 
 export interface ChoreoEnv {
   root: () => HTMLElement | null;
@@ -125,6 +135,9 @@ function pointFor(space: number, k: number): Pt {
 
 export function makePlan(env: ChoreoEnv) {
   const q = (sel: string) => env.root()?.querySelector(sel) ?? null;
+  // The end-of-race reveal builds one overlay per pile, a card at a time.
+  let finalRanking: RacingColor[] | null = null;
+  let pile: Extract<Overlay, { kind: 'pile' }> | null = null;
 
   return (
     event: CamelUpEvent | null,
@@ -274,7 +287,7 @@ export function makePlan(env: ChoreoEnv) {
             env.setOverlay({
               kind: 'banner',
               title: event.direction === 'forward' ? 'Finish!' : 'Backwards over the line!',
-              sub: leader ? `${leader} crosses the line` : 'The race is over',
+              sub: leader ? `${camelName(leader)} crosses the line` : 'The race is over',
               tone: 'gold',
             });
             await ctx.wait(1500);
@@ -282,6 +295,7 @@ export function makePlan(env: ChoreoEnv) {
           },
         };
       case 'legScored':
+        if (next.crossed) finalRanking = event.ranking;
         return {
           post: async (ctx) => {
             env.setOverlay({ kind: 'leg', event });
@@ -305,9 +319,17 @@ export function makePlan(env: ChoreoEnv) {
       case 'overallCard':
         return {
           post: async (ctx) => {
-            env.setOverlay({ kind: 'card', event });
+            const camel =
+              (event.pile === 'winner' ? finalRanking?.[0] : finalRanking?.at(-1)) ?? null;
+            pile =
+              pile?.pile === event.pile
+                ? { ...pile, cards: [...pile.cards, event] }
+                : { kind: 'pile', pile: event.pile, camel, cards: [event] };
+            env.setOverlay(pile);
+            const total = event.pile === 'winner' ? next.winnerPile.length : next.loserPile.length;
+            // Quick reveals, with a beat on the last card of each pile.
             await Promise.all([
-              ctx.wait(1100),
+              ctx.wait(event.index === total - 1 ? 1300 : 420),
               floatText(
                 ctx,
                 q(`[data-panel="${event.seat}"] [data-coins]`),
@@ -319,15 +341,10 @@ export function makePlan(env: ChoreoEnv) {
         };
       case 'gameEnded':
         return {
-          post: async (ctx) => {
-            env.setOverlay({
-              kind: 'banner',
-              title: `${event.winner} wins`,
-              sub: `${event.loser} came last`,
-              tone: 'gold',
-            });
-            await ctx.wait(2200);
-            env.setOverlay(null);
+          // Stays up until closed; the room shows the results under the board.
+          post: () => {
+            pile = null;
+            env.setOverlay({ kind: 'final', winner: event.winner, loser: event.loser });
           },
         };
       case 'turnPassed':

@@ -126,12 +126,12 @@
     background-position: -1px -1px;
   }
 
-  /* "+5" / "−1" tags that lib/motion/kit.ts floatText spawns over an anchor */
+  /* "+5" / "−1" tags that lib/motion/kit.ts floatText spawns beside an anchor */
   .float-tag {
     position: absolute;
-    left: 50%;
-    bottom: 100%;
-    translate: -50% 0;
+    right: calc(100% + 6px);
+    top: 50%;
+    translate: 0 -50%;
     z-index: 5;
     padding: 3px 6px;
     border: 1px solid currentColor;

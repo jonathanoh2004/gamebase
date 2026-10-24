@@ -24,7 +24,7 @@ export interface StageProps {
 }
 
 export function Stage({ width, height, className, children, ref, label }: StageProps) {
-  const outer = useRef<HTMLDivElement>(null);
+  const outer = useRef<HTMLElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useImperativeHandle(ref, () => inner.current as HTMLDivElement, []);
@@ -44,11 +44,10 @@ export function Stage({ width, height, className, children, ref, label }: StageP
   }, [width, height]);
 
   return (
-    <div
+    <section
       ref={outer}
       className={className}
       style={{ position: 'relative', width: '100%', aspectRatio: `${width} / ${height}` }}
-      role="img"
       aria-label={label}
     >
       <div
@@ -67,7 +66,7 @@ export function Stage({ width, height, className, children, ref, label }: StageP
         {children}
         <div data-ghost-layer style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
       </div>
-    </div>
+    </section>
   );
 }
 

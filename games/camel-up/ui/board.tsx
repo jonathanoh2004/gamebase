@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/cn';
 import { toast } from '@/components/ui/toast';
 import type { BoardProps } from '@/games/client';
@@ -17,9 +16,9 @@ import {
   type Pile,
   RACING,
   type RacingColor,
-  type Side,
   TRACK_LENGTH,
 } from '../engine/types';
+import { ActionBar } from './action-bar';
 import { BoardArt } from './art';
 import { Camel } from './camel';
 import { makePlan, type Overlay } from './choreography';
@@ -34,31 +33,22 @@ import {
   STAGE_W,
   TENT_H,
   TENT_W,
+  TILE_H,
+  TILE_W,
   tentRect,
   tileRect,
   WINNER_PILE,
 } from './geometry';
 import { CAMEL_SCALE, camelSpaces, layoutCamelUp } from './layout';
 import { BoardOverlay } from './overlay';
-import { CAMEL_STYLE, camelName } from './palette';
+import { CAMEL_STYLE } from './palette';
 import { PlayerPanel } from './panels';
 import { CardBack, Die, PyramidToken, SpectatorTile, Ticket } from './pieces';
 import { Pyramid } from './pyramid';
 
-function describeAction(a: CamelUpAction, view: CamelUpView): string {
-  switch (a.type) {
-    case 'takeTicket':
-      return `Take the ${camelName(a.color).toLowerCase()} ${view.legStacks[a.color][0] ?? ''} ticket`;
-    case 'roll':
-      return 'Take a pyramid ticket and roll';
-    case 'placeSpectator':
-      return `Put your tile on space ${a.space}`;
-    case 'bet':
-      return `Bet ${camelName(a.color).toLowerCase()} to ${a.pile === 'winner' ? 'win' : 'lose'} the race`;
-    case 'partner':
-      return `Partner with ${view.players[a.with]?.name ?? 'them'} this leg`;
-  }
-}
+// Board and action bar always fit the viewport: the stage is as wide as the
+// height left over after the page chrome (--board-chrome) allows.
+const BOARD_MAX_W = `max(300px, calc((100dvh - var(--board-chrome, 210px)) * ${STAGE_W / STAGE_H}))`;
 
 export function CamelUpBoard({ session, players, mode }: BoardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -67,7 +57,13 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   const [log, setLog] = useState<string[]>([]);
   const [selected, setSelected] = useState<CamelUpAction | null>(null);
   const [betPile, setBetPile] = useState<Pile | null>(null);
+  const [tileMode, setTileMode] = useState(false);
   const [pending, setPending] = useState(false);
+  const clear = useCallback(() => {
+    setSelected(null);
+    setBetPile(null);
+    setTileMode(false);
+  }, []);
 
   const plan = useMemo(
     () => makePlan({ root: () => rootRef.current, setOverlay, you: () => youRef.current }),
@@ -88,44 +84,46 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   youRef.current = seat;
   namesRef.current = (s: number) => view?.players[s]?.name ?? `Seat ${s + 1}`;
 
-  const myTurn = !!view && view.phase === 'playing' && seat !== null && view.turn === seat;
+  // The engine stays in 'playing' through the final scoring; a crossed unit ends the race.
+  const raceOver = !!view && (view.phase === 'finished' || view.crossed !== null);
+  const myTurn = !!view && !raceOver && seat !== null && view.turn === seat;
   const canAct = myTurn && !busy && !pending;
 
   // Drop stale selections whenever the turn or view moves on.
   useEffect(() => {
-    if (!canAct) {
-      setSelected(null);
-      setBetPile(null);
-    }
-  }, [canAct]);
+    if (!canAct) clear();
+  }, [canAct, clear]);
 
   const confirm = useCallback(async () => {
     if (!selected || !canAct) return;
     setPending(true);
     try {
       await session.act(selected);
-      setSelected(null);
-      setBetPile(null);
+      clear();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : (err as Error).message, 'bad');
     } finally {
       setPending(false);
     }
-  }, [selected, canAct, session]);
+  }, [selected, canAct, session, clear]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setSelected(null);
-        setBetPile(null);
-      } else if (e.key === 'Enter' && selected && (e.target as HTMLElement)?.tagName !== 'BUTTON') {
+        clear();
+      } else if (
+        e.key === 'Enter' &&
+        selected &&
+        // Confirm/Cancel and form fields keep their own Enter behavior.
+        !(e.target as HTMLElement | null)?.closest('input, textarea, select, [data-own-enter]')
+      ) {
         e.preventDefault();
         void confirm();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selected, confirm]);
+  }, [selected, confirm, clear]);
 
   // Flag the tab when it becomes your turn while you're elsewhere.
   useEffect(() => {
@@ -162,17 +160,19 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
   const pieces = layoutCamelUp(view);
   const selectedSpace = selected?.type === 'placeSpectator' ? selected.space : null;
   const showSpaces = canAct && (selected?.type === 'placeSpectator' || selected === null);
+  const strongSpaces = canAct && tileMode;
   const partnersAllowed = view.players.length >= PARTNERSHIP_MIN_PLAYERS;
 
   const pick = (a: CamelUpAction) => {
     if (!canAct) return;
     setBetPile(null);
+    if (a.type !== 'placeSpectator') setTileMode(false);
     setSelected(a);
   };
 
   return (
     <div ref={rootRef} className="grid gap-4 xl:grid-cols-[1fr_320px]" data-testid="camel-up">
-      <div className="min-w-0 space-y-3">
+      <div className="mx-auto w-full min-w-0 space-y-3" style={{ maxWidth: BOARD_MAX_W }}>
         <div className="relative">
           <Stage
             ref={stageRef}
@@ -181,7 +181,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
             className="border border-rule"
             label="Camel Up board"
           >
-            <BoardArt highlight={showSpaces ? legalSpaces : new Set()} />
+            <BoardArt highlight={showSpaces ? legalSpaces : new Set()} strong={strongSpaces} />
 
             {/* track spaces as click targets for the spectator tile */}
             {Array.from({ length: TRACK_LENGTH }, (_, i) => i + 1).map((space) => {
@@ -236,6 +236,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
                       ? 'cursor-pointer border-rule-strong hover:-translate-y-1'
                       : 'cursor-default border-rule',
                     chosen && 'outline-2 outline-yellow outline-offset-2 -translate-y-1',
+                    raceOver && 'opacity-35',
                   )}
                   style={{
                     left: r.x,
@@ -288,6 +289,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
                     disabled={!legal}
                     onClick={() => {
                       setSelected(null);
+                      setTileMode(false);
                       setBetPile((p) => (p === pile ? null : pile));
                     }}
                     aria-label={`Bet on the overall ${pile}`}
@@ -301,11 +303,11 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
                       {cards.length === 0 ? (
                         <span className="label">no bets</span>
                       ) : (
-                        cards.slice(-5).map((c, i) => (
+                        cards.slice(-6).map((c, i) => (
                           <span
                             // biome-ignore lint/suspicious/noArrayIndexKey: placement order
                             key={i}
-                            className="-ml-4 first:ml-0"
+                            className="-ml-6 first:ml-0"
                             style={{ zIndex: i }}
                           >
                             <CardBack owner={players[c.seat]?.color ?? 'yellow'} color={c.color} />
@@ -377,6 +379,22 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
               );
             })}
 
+            {/* preview of the tile you're about to place */}
+            {selected?.type === 'placeSpectator' && seat !== null && (
+              <div
+                className="pointer-events-none absolute opacity-60"
+                style={{
+                  left: tileRect(selected.space).x + TILE_W / 2,
+                  top: tileRect(selected.space).y + TILE_H / 2 + 18,
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 5,
+                }}
+                aria-hidden="true"
+              >
+                <SpectatorTile side={selected.side} owner={players[seat]?.color ?? 'yellow'} />
+              </div>
+            )}
+
             {/* moving pieces */}
             {view.players.map((p, owner) =>
               p.spectator && pieces[`tile-${owner}`] ? (
@@ -422,7 +440,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
               );
             })}
 
-            <BoardOverlay overlay={overlay} view={view} />
+            <BoardOverlay overlay={overlay} view={view} onClose={() => setOverlay(null)} />
           </Stage>
         </div>
 
@@ -430,26 +448,35 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
           view={view}
           seat={seat}
           myTurn={myTurn}
+          raceOver={raceOver}
+          canAct={canAct}
           busy={busy}
           pending={pending}
           selected={selected}
           betPile={betPile}
+          tileMode={tileMode}
+          canPlaceTile={legalSpaces.size > 0}
           hand={me?.hand ?? []}
-          onSide={(side: Side) =>
+          onPick={pick}
+          onBetPile={(p) => {
+            setSelected(null);
+            setTileMode(false);
+            setBetPile(p);
+          }}
+          onTileMode={() => {
+            setSelected(null);
+            setTileMode(true);
+          }}
+          onSide={(side) =>
             selected?.type === 'placeSpectator' && setSelected({ ...selected, side })
           }
-          onBet={(color) => betPile && setSelected({ type: 'bet', pile: betPile, color })}
-          onRoll={() => pick({ type: 'roll' })}
           onConfirm={confirm}
-          onCancel={() => {
-            setSelected(null);
-            setBetPile(null);
-          }}
+          onCancel={clear}
           onSkip={skip}
         />
       </div>
 
-      <aside className="space-y-2">
+      <aside className="grid grid-cols-2 content-start gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-1">
         {view.players.map((_, s) => (
           <PlayerPanel
             // biome-ignore lint/suspicious/noArrayIndexKey: seats are fixed for a match
@@ -473,7 +500,7 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
             }
           />
         ))}
-        <section className="border border-rule bg-ink-1 p-3" aria-label="Game log">
+        <section className="col-span-full border border-rule bg-ink-1 p-3" aria-label="Game log">
           <h3 className="label mb-2">Log</h3>
           <ol className="max-h-56 space-y-1 overflow-auto text-dim text-sm" aria-live="polite">
             {log.length === 0 && <li className="text-mute">The race is about to start.</li>}
@@ -486,131 +513,6 @@ export function CamelUpBoard({ session, players, mode }: BoardProps) {
           </ol>
         </section>
       </aside>
-    </div>
-  );
-}
-
-function ActionBar({
-  view,
-  seat,
-  myTurn,
-  busy,
-  pending,
-  selected,
-  betPile,
-  hand,
-  onSide,
-  onBet,
-  onRoll,
-  onConfirm,
-  onCancel,
-  onSkip,
-}: {
-  view: CamelUpView;
-  seat: number | null;
-  myTurn: boolean;
-  busy: boolean;
-  pending: boolean;
-  selected: CamelUpAction | null;
-  betPile: Pile | null;
-  hand: RacingColor[];
-  onSide: (s: Side) => void;
-  onBet: (c: RacingColor) => void;
-  onRoll: () => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-  onSkip: () => void;
-}) {
-  const turnName = view.players[view.turn]?.name ?? '';
-  let status: string;
-  if (view.phase === 'finished') status = 'The race is over';
-  else if (seat === null) status = `Watching · ${turnName}’s turn`;
-  else if (myTurn) status = 'Your turn · pick one action';
-  else status = `${turnName}’s turn`;
-
-  return (
-    <div
-      className={cn(
-        'flex min-h-16 flex-wrap items-center gap-3 border px-4 py-3',
-        myTurn ? 'border-yellow bg-ink-1' : 'border-rule bg-ink-1',
-      )}
-      data-testid="action-bar"
-    >
-      <span data-your-turn className={cn('font-bold', myTurn && 'text-yellow')}>
-        {status}
-      </span>
-      {myTurn && !selected && !betPile && (
-        <span className="text-mute text-sm">
-          Tap a ticket, the pyramid, a glowing space, or a bet pile.
-        </span>
-      )}
-      {myTurn && betPile && !selected && (
-        <span className="flex items-center gap-2">
-          <span className="label">Overall {betPile}:</span>
-          {hand.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onBet(c)}
-              className="flex items-center gap-1 border border-rule-strong px-2 py-1 hover:border-paper"
-              aria-label={`Bet ${CAMEL_STYLE[c].label}`}
-            >
-              <span className="size-3 rounded-full" style={{ background: CAMEL_STYLE[c].fill }} />
-              <span className="label">{c}</span>
-            </button>
-          ))}
-        </span>
-      )}
-      {selected && (
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm">{describeAction(selected, view)}</span>
-          {selected.type === 'placeSpectator' && (
-            <span className="flex">
-              {(['cheer', 'boo'] as const).map((side) => (
-                <button
-                  key={side}
-                  type="button"
-                  onClick={() => onSide(side)}
-                  className={cn(
-                    'label border px-2 py-1',
-                    selected.side === side ? 'border-paper text-paper' : 'border-rule',
-                  )}
-                >
-                  {side === 'cheer' ? '+1 cheer' : '−1 boo'}
-                </button>
-              ))}
-            </span>
-          )}
-        </span>
-      )}
-      <span className="ml-auto flex items-center gap-2">
-        {busy && (
-          <Button size="sm" variant="quiet" onClick={onSkip}>
-            Skip ▸▸
-          </Button>
-        )}
-        {myTurn && !selected && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onRoll}
-            disabled={busy || pending}
-            data-testid="roll"
-          >
-            Roll
-          </Button>
-        )}
-        {selected && (
-          <>
-            <Button size="sm" variant="quiet" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={onConfirm} disabled={busy || pending} data-testid="confirm">
-              {pending ? '…' : 'Confirm ↵'}
-            </Button>
-          </>
-        )}
-      </span>
     </div>
   );
 }

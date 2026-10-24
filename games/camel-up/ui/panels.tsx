@@ -106,7 +106,7 @@ export function PlayerPanel({
         </span>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <span className="label">
           {p.spectator
             ? `tile on ${p.spectator.space} ${p.spectator.side === 'cheer' ? '+1' : '−1'}`

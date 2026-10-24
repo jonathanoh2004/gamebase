@@ -51,6 +51,7 @@ export function useFramePlayer<V, E>(
           director.snap(msg.view as V, msg.version);
         }
       } else {
+        if (msg.seat !== undefined) setSeat(msg.seat);
         director?.enqueue(msg.frames as never);
       }
     });

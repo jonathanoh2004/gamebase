@@ -138,7 +138,7 @@ export function floatText<V>(
   anchor.appendChild(tag);
   return ctx
     .animate(tag, {
-      y: [0, -34],
+      y: [6, -14],
       opacity: [
         { to: 1, duration: 120 },
         { to: 1, duration: 520 },

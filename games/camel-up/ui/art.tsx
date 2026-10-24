@@ -3,6 +3,7 @@ import {
   FINISH_X,
   INFIELD,
   LOSER_PILE,
+  nextAngle,
   RING_X,
   RING_Y,
   STAGE_H,
@@ -20,7 +21,14 @@ const SAND_0 = 'var(--color-sand-0)';
 const SAND_1 = 'var(--color-sand-1)';
 const LINE = 'rgba(201,164,103,0.28)';
 
-export function BoardArt({ highlight }: { highlight: Set<number> }) {
+/** `highlight` marks legal spaces for the spectator tile; `strong` when the player is placing one. */
+export function BoardArt({
+  highlight,
+  strong = false,
+}: {
+  highlight: Set<number>;
+  strong?: boolean;
+}) {
   const spaces = Array.from({ length: TRACK_LENGTH }, (_, i) => i + 1);
   return (
     <svg
@@ -63,11 +71,19 @@ export function BoardArt({ highlight }: { highlight: Set<number> }) {
               y={r.y + 3}
               width={r.w - 6}
               height={r.h - 6}
-              fill={lit ? '#4a3b27' : SAND_1}
-              stroke={lit ? 'var(--color-yellow)' : LINE}
-              strokeWidth={lit ? 2 : 1}
-              strokeDasharray={lit ? '6 5' : undefined}
+              fill={lit ? (strong ? '#4d3c26' : '#43352a') : SAND_1}
+              stroke={lit ? (strong ? 'var(--color-yellow)' : 'rgba(247,208,56,0.45)') : LINE}
+              strokeWidth={lit && strong ? 4 : 1}
+              strokeDasharray={lit && strong ? '10 8' : undefined}
             />
+            {lit && (
+              <circle
+                cx={r.x + r.w - 18}
+                cy={r.y + 20}
+                r={strong ? 9 : 4.5}
+                fill="var(--color-yellow)"
+              />
+            )}
             <text
               x={r.x + 14}
               y={r.y + 28}
@@ -78,6 +94,15 @@ export function BoardArt({ highlight }: { highlight: Set<number> }) {
             >
               {String(space).padStart(2, '0')}
             </text>
+            <path
+              d="M-3 -5 2 0 -3 5"
+              transform={`translate(${r.x + 48} ${r.y + 23}) rotate(${nextAngle(space)})`}
+              fill="none"
+              stroke="rgba(242,239,232,0.32)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </g>
         );
       })}
@@ -128,14 +153,6 @@ export function BoardArt({ highlight }: { highlight: Set<number> }) {
         >
           FINISH
         </text>
-      </g>
-
-      {/* direction chevrons in the corners of the ring */}
-      <g fill="none" stroke="rgba(242,239,232,0.35)" strokeWidth="2.5" strokeLinecap="round">
-        <path d={`M${RING_X + 6 * TILE_W - 40} ${RING_Y + 14} l12 8 -12 8`} />
-        <path d={`M${RING_X + 6 * TILE_W - 22} ${RING_Y + 4 * TILE_H - 40} l-8 12 -8 -12`} />
-        <path d={`M${RING_X + 40} ${RING_Y + 4 * TILE_H - 30} l-12 -8 12 -8`} />
-        <path d={`M${RING_X + 22} ${RING_Y + 40} l8 -12 8 12`} />
       </g>
 
       {/* infield */}

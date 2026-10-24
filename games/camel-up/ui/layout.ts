@@ -6,7 +6,7 @@ import { crossedPoint, diceSlot, groundPoint, tileRect } from './geometry';
 // The single source of truth for where every moving piece rests (DESIGN.md
 // §6.1). React renders pieces here; the director animates between layouts.
 
-export const CAMEL_SCALE = 1.1;
+export const CAMEL_SCALE = 1.3;
 export const STEP = STACK_STEP * CAMEL_SCALE;
 
 export function camelPlacement(space: number, height: number, onTrack = true) {

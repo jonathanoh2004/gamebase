@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>gamebase</title>
+  <rect width="32" height="32" rx="6" fill="#0e0e10"/>
+  <circle cx="10" cy="10" r="4.5" fill="#ff5449"/>
+  <rect x="17.5" y="5.5" width="9" height="9" fill="#f7d038"/>
+  <path d="M10 17.5 15 26.5H5Z" fill="#4c8dff"/>
+  <path d="M22 17.5 26.5 22 22 26.5 17.5 22Z" fill="#34c77b"/>
+</svg>

@@ -6,7 +6,8 @@ import type { FxMessage } from '@/lib/realtime/messages';
 /** What a game board consumes: an initial snapshot, then frames to animate. */
 export type FrameMessage =
   | { kind: 'snapshot'; version: number; view: unknown; seat: number | null }
-  | { kind: 'frames'; frames: Frame[] };
+  /** `seat` is set when the viewer changes along with these frames (sandbox). */
+  | { kind: 'frames'; frames: Frame[]; seat?: number | null };
 
 export type FrameListener = (msg: FrameMessage) => void;
 

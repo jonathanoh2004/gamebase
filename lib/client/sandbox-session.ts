@@ -21,6 +21,7 @@ export class SandboxSession implements GameSession {
   private version = 0;
   private listener: FrameListener | null = null;
   private viewer: Seat | 'spectator' = 0;
+  private follow = false;
   private fx = new Set<(m: FxMessage) => void>();
   readonly log: SandboxLogEntry[] = [];
   private subscribers = new Set<() => void>();
@@ -64,6 +65,16 @@ export class SandboxSession implements GameSession {
     for (const cb of this.subscribers) cb();
   }
 
+  /**
+   * Pass-and-play: after each move the board switches to whoever acts next.
+   * The move's frames are built for that seat, so it still animates.
+   */
+  setFollow(on: boolean) {
+    this.follow = on;
+    const next = this.active[0];
+    if (on && next !== undefined && next !== this.viewer) this.setViewer(next);
+  }
+
   /** Switch whose eyes the board sees through (hidden information included). */
   setViewer(viewer: Seat | 'spectator') {
     this.viewer = viewer;
@@ -104,18 +115,30 @@ export class SandboxSession implements GameSession {
     this.state = next;
     this.version = version;
     this.log.push({ version, seat: actor, action: parsed, events });
+    const following = this.follow ? this.active[0] : undefined;
+    if (following !== undefined) this.viewer = following;
     const frames: Frame[] = buildFrames(this.engine, before, [{ version, events }], this.viewer);
-    this.listener?.({ kind: 'frames', frames });
+    this.listener?.({
+      kind: 'frames',
+      frames,
+      ...(following !== undefined && { seat: following }),
+    });
     this.changed();
   }
 
-  /** A test bot: a random legal move for the first active seat. */
+  /**
+   * A test bot: a random legal move for the first active seat. It picks the
+   * kind of move first, so a lone "roll" isn't drowned out by forty
+   * tile placements.
+   */
   async botMove(rng = createRng(`${this.seed}:bot`, this.version)) {
     const seat = this.active[0];
     if (seat === undefined) return false;
-    const legal = this.engine.legalActions(this.state, seat);
+    const legal = this.engine.legalActions(this.state, seat) as { type?: unknown }[];
     if (legal.length === 0) return false;
-    await this.act(rng.pick(legal), seat);
+    const kinds = [...new Set(legal.map((a) => String(a.type)))];
+    const kind = rng.pick(kinds);
+    await this.act(rng.pick(legal.filter((a) => String(a.type) === kind)) as never, seat);
     return true;
   }
 

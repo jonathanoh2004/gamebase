@@ -46,8 +46,15 @@ export function RoomClient({
   const Board = BOARDS[room.gameId];
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-rule border-b py-4">
-        <h1 className="font-extrabold text-2xl tracking-[-0.03em]">{gameName}</h1>
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-4 gap-y-2 border-rule border-b',
+          inGame ? 'py-2' : 'py-4',
+        )}
+      >
+        <h1 className={cn('font-extrabold tracking-[-0.03em]', inGame ? 'text-lg' : 'text-2xl')}>
+          {gameName}
+        </h1>
         <span className="label">Room {room.code}</span>
         <span className="label">
           {room.status === 'lobby' ? 'Lobby' : room.status === 'playing' ? 'Playing' : 'Finished'}
@@ -74,7 +81,7 @@ export function RoomClient({
         </span>
       </div>
       {inGame && room.match && Board ? (
-        <div className="space-y-6 pt-6">
+        <div className="space-y-6 pt-4">
           {room.match.players.every((p) => !p.isYou) && (
             <p className="label text-teal">Watching as a spectator</p>
           )}

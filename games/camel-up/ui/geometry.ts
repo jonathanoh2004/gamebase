@@ -46,6 +46,14 @@ export function tileRect(space: number): Rect {
   return { x: RING_X + cell[0] * TILE_W, y: RING_Y + cell[1] * TILE_H, w: TILE_W, h: TILE_H };
 }
 
+/** Screen angle (0 = right, 90 = down) from a space toward the next one. */
+export function nextAngle(space: number): number {
+  const here = CELLS[space];
+  const next = CELLS[space + 1] ?? [(here?.[0] ?? 0) + 1, here?.[1] ?? 0];
+  if (!here) return 0;
+  return (Math.atan2(next[1] - here[1], next[0] - here[0]) * 180) / Math.PI;
+}
+
 /** Where a stack's bottom camel stands (its center), on a track space. */
 export function groundPoint(space: number): { x: number; y: number } {
   const r = tileRect(space);
@@ -59,8 +67,8 @@ export const FINISH_TOP = RING_Y;
 /** Off-board landing spots for a unit that crossed the line. */
 export function crossedPoint(space: number): { x: number; y: number } {
   return space > TRACK_LENGTH
-    ? { x: FINISH_X + 44 + (space - TRACK_LENGTH - 1) * 18, y: RING_Y - 24 }
-    : { x: FINISH_X - 44 - (1 - space) * 18, y: RING_Y - 24 };
+    ? { x: FINISH_X + 76 + (space - TRACK_LENGTH - 1) * 18, y: RING_Y - 24 }
+    : { x: FINISH_X - 76 - (1 - space) * 18, y: RING_Y - 24 };
 }
 
 /** Racing camels face the race direction on screen: right along the top, left along the bottom. */
